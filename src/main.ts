@@ -2,6 +2,7 @@ import {
   App,
   Editor,
   MarkdownView,
+  Modal,
   Notice,
   Plugin,
   PluginSettingTab,
@@ -26,13 +27,74 @@ interface ChatMessage {
   noteTitle?: string;
 }
 
+interface PromptTemplate {
+  id: string;
+  name: string;
+  icon: string;
+  prompt: string;
+  useNoteContext: boolean;
+  createdAt: string;
+}
+
 interface DeepVaultSettings {
   apiKey: string;
   model: string;
   maxTokens: number;
   enableWebSearch: boolean;
   exportFolder: string;
+  templates: PromptTemplate[];
 }
+
+const DEFAULT_TEMPLATES: PromptTemplate[] = [
+  {
+    id: "tpl-1",
+    name: "Executive Summary",
+    icon: "📋",
+    prompt: "Write a crisp executive summary of this note in 3 sentences, suitable for sharing with a non-expert audience:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "tpl-2",
+    name: "Critical Analysis",
+    icon: "🔬",
+    prompt: "Critically analyse this note. What are the strongest arguments? What assumptions are made? What are the weakest points?",
+    useNoteContext: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "tpl-3",
+    name: "Explain Simply",
+    icon: "🧒",
+    prompt: "Explain the main ideas of this note as if explaining to a curious 12-year-old with no background knowledge:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "tpl-4",
+    name: "Action Items",
+    icon: "✅",
+    prompt: "Based on this note, generate a prioritised list of concrete action items and next steps I should take:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "tpl-5",
+    name: "Counter Arguments",
+    icon: "⚔️",
+    prompt: "Generate the strongest possible counter-arguments and opposing viewpoints to the ideas presented in this note:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "tpl-6",
+    name: "Tweet Thread",
+    icon: "🐦",
+    prompt: "Turn the key ideas from this note into an engaging Twitter/X thread of 5 tweets. Make it accessible and interesting:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString(),
+  },
+];
 
 const DEFAULT_SETTINGS: DeepVaultSettings = {
   apiKey: "",
@@ -40,6 +102,7 @@ const DEFAULT_SETTINGS: DeepVaultSettings = {
   maxTokens: 2000,
   enableWebSearch: true,
   exportFolder: "Deep Vault Exports",
+  templates: DEFAULT_TEMPLATES,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -143,17 +206,19 @@ class NoteSuggestModal extends SuggestModal<TFile> {
 class DeepVaultView extends ItemView {
   private plugin: DeepVaultPlugin;
   private chatHistory: ChatMessage[] = [];
-  private activeTab: "research" | "chat" | "synthesis" | "history" = "research";
+  private activeTab: "research" | "chat" | "synthesis" | "templates" | "history" = "research";
   private lastResponse: string = "";
 
   // UI elements
   private tabResearch: HTMLElement;
   private tabChat: HTMLElement;
   private tabSynthesis: HTMLElement;
+  private tabTemplates: HTMLElement;
   private tabHistory: HTMLElement;
   private panelResearch: HTMLElement;
   private panelChat: HTMLElement;
   private panelSynthesis: HTMLElement;
+  private panelTemplates: HTMLElement;
   private panelHistory: HTMLElement;
   private chatMessagesEl: HTMLElement;
   private chatInputEl: HTMLTextAreaElement;
@@ -178,6 +243,7 @@ class DeepVaultView extends ItemView {
     this.buildPanelResearch(root);
     this.buildPanelChat(root);
     this.buildPanelSynthesis(root);
+    this.buildPanelTemplates(root);
     this.buildPanelHistory(root);
     this.statusEl = root.createDiv("dv-status");
     this.switchTab("research");
@@ -213,23 +279,28 @@ class DeepVaultView extends ItemView {
     this.tabSynthesis.innerHTML = "🔗 Synthesis";
     this.tabSynthesis.onclick = () => this.switchTab("synthesis");
 
+    this.tabTemplates = tabBar.createDiv("dv-tab");
+    this.tabTemplates.innerHTML = "📝 Templates";
+    this.tabTemplates.onclick = () => this.switchTab("templates");
+
     this.tabHistory = tabBar.createDiv("dv-tab");
     this.tabHistory.innerHTML = "📋 History";
     this.tabHistory.onclick = () => this.switchTab("history");
   }
 
-  private switchTab(tab: "research" | "chat" | "synthesis" | "history") {
+  private switchTab(tab: "research" | "chat" | "synthesis" | "templates" | "history") {
     this.activeTab = tab;
-    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabHistory];
-    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelHistory];
+    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabTemplates, this.tabHistory];
+    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelTemplates, this.panelHistory];
     tabs.forEach(t => t.removeClass("dv-tab-active"));
     panels.forEach(p => p.addClass("dv-hidden"));
 
-    const map = { research: 0, chat: 1, synthesis: 2, history: 3 };
+    const map: Record<string, number> = { research: 0, chat: 1, synthesis: 2, templates: 3, history: 4 };
     tabs[map[tab]].addClass("dv-tab-active");
     panels[map[tab]].removeClass("dv-hidden");
 
     if (tab === "chat") this.chatInputEl?.focus();
+    if (tab === "templates") this.renderTemplates();
     if (tab === "history") this.renderHistory();
   }
 
@@ -523,6 +594,137 @@ class DeepVaultView extends ItemView {
     this.setStatus("");
   }
 
+
+  // ─── Templates Panel (v3.0.1) ─────────────────────────────────────────────
+
+  private buildPanelTemplates(root: HTMLElement) {
+    this.panelTemplates = root.createDiv("dv-panel");
+  }
+
+  private renderTemplates() {
+    this.panelTemplates.empty();
+
+    // Header row
+    const headerRow = this.panelTemplates.createDiv("dv-templates-header");
+    headerRow.createEl("p", { text: "MY TEMPLATES", cls: "dv-section-label" });
+    const newBtn = headerRow.createEl("button", { text: "+ New", cls: "dv-btn-new-template" });
+    newBtn.onclick = () => this.openTemplateEditor();
+
+    const templates = this.plugin.settings.templates;
+
+    if (templates.length === 0) {
+      const empty = this.panelTemplates.createDiv("dv-empty-state");
+      empty.createEl("p", { text: "📝", cls: "dv-empty-icon" });
+      empty.createEl("p", { text: "No templates yet", cls: "dv-empty-title" });
+      empty.createEl("p", { text: "Create your first reusable prompt template", cls: "dv-empty-desc" });
+      return;
+    }
+
+    // Template cards
+    const list = this.panelTemplates.createDiv("dv-template-list");
+    for (const tpl of templates) {
+      this.renderTemplateCard(list, tpl);
+    }
+
+    // Tip
+    this.panelTemplates.createEl("p", {
+      text: "💡 Tip: Templates with Note Context use your open note as input.",
+      cls: "dv-template-tip"
+    });
+  }
+
+  private renderTemplateCard(container: HTMLElement, tpl: PromptTemplate) {
+    const card = container.createDiv("dv-template-card");
+
+    const cardTop = card.createDiv("dv-template-card-top");
+    cardTop.createEl("span", { text: tpl.icon, cls: "dv-template-icon" });
+    const cardInfo = cardTop.createDiv("dv-template-info");
+    cardInfo.createEl("p", { text: tpl.name, cls: "dv-template-name" });
+    cardInfo.createEl("p", { text: tpl.prompt.slice(0, 60) + (tpl.prompt.length > 60 ? "..." : ""), cls: "dv-template-preview" });
+
+    const cardBadge = cardTop.createDiv("dv-template-badges");
+    if (tpl.useNoteContext) {
+      cardBadge.createEl("span", { text: "📄 Note", cls: "dv-template-badge" });
+    }
+
+    const cardActions = card.createDiv("dv-template-card-actions");
+
+    const runBtn = cardActions.createEl("button", { text: "▶ Run", cls: "dv-btn-run-template" });
+    runBtn.onclick = () => this.runTemplate(tpl);
+
+    const editBtn = cardActions.createEl("button", { text: "✏️ Edit", cls: "dv-btn-ghost-sm" });
+    editBtn.onclick = () => this.openTemplateEditor(tpl);
+
+    const deleteBtn = cardActions.createEl("button", { text: "🗑", cls: "dv-btn-ghost-sm dv-btn-delete" });
+    deleteBtn.onclick = async () => {
+      this.plugin.settings.templates = this.plugin.settings.templates.filter(t => t.id !== tpl.id);
+      await this.plugin.saveSettings();
+      this.renderTemplates();
+      new Notice(`Template "${tpl.name}" deleted.`);
+    };
+  }
+
+  private openTemplateEditor(existing?: PromptTemplate) {
+    new TemplateEditorModal(this.app, existing, async (tpl: PromptTemplate) => {
+      if (existing) {
+        const idx = this.plugin.settings.templates.findIndex(t => t.id === existing.id);
+        if (idx !== -1) this.plugin.settings.templates[idx] = tpl;
+      } else {
+        this.plugin.settings.templates.push(tpl);
+      }
+      await this.plugin.saveSettings();
+      this.renderTemplates();
+      new Notice(`Template "${tpl.name}" ${existing ? "updated" : "created"}!`);
+    }).open();
+  }
+
+  private async runTemplate(tpl: PromptTemplate) {
+    const note = this.getCurrentNote();
+
+    if (tpl.useNoteContext && !note) {
+      new Notice("This template needs an open note. Please open a note first.");
+      return;
+    }
+
+    // Switch to research tab to show result
+    this.switchTab("research");
+
+    const prompt = tpl.useNoteContext && note
+      ? `${tpl.prompt}\n\n# ${note.title}\n\n${note.content.slice(0, 3000)}`
+      : tpl.prompt;
+
+    this.setStatus(`⏳ Running "${tpl.name}"...`);
+    this.responseEl.empty();
+    this.responseEl.createEl("p", { text: `⏳ Running template: ${tpl.icon} ${tpl.name}...`, cls: "dv-thinking" });
+    (this as any)._exportRow?.addClass("dv-hidden");
+
+    if (!this.plugin.settings.apiKey) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: "⚠️ Add your API key in Settings → Deep Vault", cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompt }], false);
+      this.responseEl.empty();
+      renderMarkdown(this.responseEl, result);
+      this.lastResponse = result;
+      (this as any)._exportRow?.removeClass("dv-hidden");
+      this.chatHistory.push({
+        role: "user",
+        content: `[Template: ${tpl.name}]${note ? ` on note "${note.title}"` : ""}`,
+        timestamp: new Date(),
+        noteTitle: note?.title
+      });
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+    } catch (err) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: `❌ ${err.message}`, cls: "dv-error" });
+    }
+    this.setStatus("");
+  }
+
   // ─── History Panel ────────────────────────────────────────────────────────
 
   private buildPanelHistory(root: HTMLElement) {
@@ -755,6 +957,103 @@ ${content}
   async onClose() { }
 }
 
+
+// ─── Template Editor Modal ────────────────────────────────────────────────────
+
+class TemplateEditorModal extends Modal {
+  private existing?: PromptTemplate;
+  private onSave: (tpl: PromptTemplate) => void;
+
+  constructor(app: App, existing: PromptTemplate | undefined, onSave: (tpl: PromptTemplate) => void) {
+    super(app);
+    this.existing = existing;
+    this.onSave = onSave;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("dv-modal");
+
+    contentEl.createEl("h2", { text: this.existing ? "✏️ Edit Template" : "📝 New Template", cls: "dv-modal-title" });
+
+    // Name
+    contentEl.createEl("label", { text: "Template Name", cls: "dv-modal-label" });
+    const nameInput = contentEl.createEl("input", {
+      cls: "dv-modal-input",
+      attr: { type: "text", placeholder: "e.g. Meeting Summary", value: this.existing?.name ?? "" }
+    });
+
+    // Icon
+    contentEl.createEl("label", { text: "Icon (emoji)", cls: "dv-modal-label" });
+    const iconInput = contentEl.createEl("input", {
+      cls: "dv-modal-input dv-modal-input-sm",
+      attr: { type: "text", placeholder: "📝", value: this.existing?.icon ?? "📝" }
+    });
+
+    // Prompt
+    contentEl.createEl("label", { text: "Prompt", cls: "dv-modal-label" });
+    contentEl.createEl("p", { text: "Write your prompt. Claude will receive this, optionally followed by your note content.", cls: "dv-modal-hint" });
+    const promptInput = contentEl.createEl("textarea", {
+      cls: "dv-modal-textarea",
+      attr: { placeholder: "e.g. Summarise this note as a bullet list suitable for a team standup..." }
+    });
+    promptInput.value = this.existing?.prompt ?? "";
+
+    // Use note context toggle
+    const toggleRow = contentEl.createDiv("dv-modal-toggle-row");
+    toggleRow.createEl("label", { text: "Include current note as context", cls: "dv-modal-toggle-label" });
+    const toggleInput = toggleRow.createEl("input", {
+      attr: { type: "checkbox" }
+    }) as HTMLInputElement;
+    toggleInput.checked = this.existing?.useNoteContext ?? true;
+
+    // Quick insert variables
+    contentEl.createEl("p", { text: "Quick insert:", cls: "dv-modal-label" });
+    const varRow = contentEl.createDiv("dv-modal-var-row");
+    const vars = [
+      { label: "{{note_title}}", desc: "Note title" },
+      { label: "{{date}}", desc: "Today's date" },
+    ];
+    for (const v of vars) {
+      const chip = varRow.createEl("button", { text: v.label, cls: "dv-var-chip", attr: { title: v.desc } });
+      chip.onclick = () => {
+        const pos = promptInput.selectionStart ?? promptInput.value.length;
+        promptInput.value = promptInput.value.slice(0, pos) + v.label + promptInput.value.slice(pos);
+        promptInput.focus();
+      };
+    }
+
+    // Buttons
+    const btnRow = contentEl.createDiv("dv-modal-btn-row");
+
+    const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "dv-btn-ghost" });
+    cancelBtn.onclick = () => this.close();
+
+    const saveBtn = btnRow.createEl("button", { text: this.existing ? "Save Changes" : "Create Template", cls: "dv-btn-primary" });
+    saveBtn.onclick = () => {
+      const name = nameInput.value.trim();
+      const prompt = promptInput.value.trim();
+      if (!name) { new Notice("Please enter a template name."); return; }
+      if (!prompt) { new Notice("Please enter a prompt."); return; }
+
+      const tpl: PromptTemplate = {
+        id: this.existing?.id ?? `tpl-${Date.now()}`,
+        name,
+        icon: iconInput.value.trim() || "📝",
+        prompt,
+        useNoteContext: toggleInput.checked,
+        createdAt: this.existing?.createdAt ?? new Date().toISOString(),
+      };
+
+      this.onSave(tpl);
+      this.close();
+    };
+  }
+
+  onClose() { this.contentEl.empty(); }
+}
+
 // ─── Main Plugin ──────────────────────────────────────────────────────────────
 
 export default class DeepVaultPlugin extends Plugin {
@@ -773,7 +1072,7 @@ export default class DeepVaultPlugin extends Plugin {
     });
 
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v2.3 loaded ✅");
+    console.log("Deep Vault v3.0.1 loaded ✅");
   }
 
   async activateView() {
@@ -847,11 +1146,28 @@ class DeepVaultSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.exportFolder)
         .onChange(async value => { this.plugin.settings.exportFolder = value || "Deep Vault Exports"; await this.plugin.saveSettings(); }));
 
-    containerEl.createEl("h3", { text: "What's New in v2.3" });
+    containerEl.createEl("h3", { text: "What's New in v3.0" });
     const ul = containerEl.createEl("ul");
+    ul.createEl("li", { text: "📝 Custom Templates — save and reuse your own prompts" });
     ul.createEl("li", { text: "🔗 Synthesis tab — combine & compare multiple notes" });
     ul.createEl("li", { text: "💾 Export any response directly as a new Obsidian note" });
     ul.createEl("li", { text: "🌐 Web search — Claude can search the internet from Chat" });
     ul.createEl("li", { text: "📋 History export — save your entire session as a note" });
+
+    containerEl.createEl("h3", { text: "Prompt Templates" });
+    const tplCount = this.plugin.settings.templates.length;
+    containerEl.createEl("p", {
+      text: `You have ${tplCount} template${tplCount !== 1 ? "s" : ""}. Manage them from the 📝 Templates tab in the Deep Vault panel.`,
+      cls: "setting-item-description"
+    });
+
+    const resetBtn = containerEl.createEl("button", { text: "Reset to Default Templates", cls: "mod-warning" });
+    resetBtn.style.marginTop = "8px";
+    resetBtn.onclick = async () => {
+      this.plugin.settings.templates = DEFAULT_TEMPLATES;
+      await this.plugin.saveSettings();
+      new Notice("Templates reset to defaults.");
+      this.display();
+    };
   }
 }

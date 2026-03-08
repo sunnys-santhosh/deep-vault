@@ -31,12 +31,63 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
 var DEEP_VAULT_VIEW = "deep-vault-view";
 var DEFAULT_MODEL = "claude-sonnet-4-20250514";
+var DEFAULT_TEMPLATES = [
+  {
+    id: "tpl-1",
+    name: "Executive Summary",
+    icon: "\u{1F4CB}",
+    prompt: "Write a crisp executive summary of this note in 3 sentences, suitable for sharing with a non-expert audience:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "tpl-2",
+    name: "Critical Analysis",
+    icon: "\u{1F52C}",
+    prompt: "Critically analyse this note. What are the strongest arguments? What assumptions are made? What are the weakest points?",
+    useNoteContext: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "tpl-3",
+    name: "Explain Simply",
+    icon: "\u{1F9D2}",
+    prompt: "Explain the main ideas of this note as if explaining to a curious 12-year-old with no background knowledge:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "tpl-4",
+    name: "Action Items",
+    icon: "\u2705",
+    prompt: "Based on this note, generate a prioritised list of concrete action items and next steps I should take:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "tpl-5",
+    name: "Counter Arguments",
+    icon: "\u2694\uFE0F",
+    prompt: "Generate the strongest possible counter-arguments and opposing viewpoints to the ideas presented in this note:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "tpl-6",
+    name: "Tweet Thread",
+    icon: "\u{1F426}",
+    prompt: "Turn the key ideas from this note into an engaging Twitter/X thread of 5 tweets. Make it accessible and interesting:",
+    useNoteContext: true,
+    createdAt: new Date().toISOString()
+  }
+];
 var DEFAULT_SETTINGS = {
   apiKey: "",
   model: DEFAULT_MODEL,
   maxTokens: 2e3,
   enableWebSearch: true,
-  exportFolder: "Deep Vault Exports"
+  exportFolder: "Deep Vault Exports",
+  templates: DEFAULT_TEMPLATES
 };
 function formatTime(date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -167,6 +218,7 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     this.buildPanelResearch(root);
     this.buildPanelChat(root);
     this.buildPanelSynthesis(root);
+    this.buildPanelTemplates(root);
     this.buildPanelHistory(root);
     this.statusEl = root.createDiv("dv-status");
     this.switchTab("research");
@@ -194,6 +246,9 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     this.tabSynthesis = tabBar.createDiv("dv-tab");
     this.tabSynthesis.innerHTML = "\u{1F517} Synthesis";
     this.tabSynthesis.onclick = () => this.switchTab("synthesis");
+    this.tabTemplates = tabBar.createDiv("dv-tab");
+    this.tabTemplates.innerHTML = "\u{1F4DD} Templates";
+    this.tabTemplates.onclick = () => this.switchTab("templates");
     this.tabHistory = tabBar.createDiv("dv-tab");
     this.tabHistory.innerHTML = "\u{1F4CB} History";
     this.tabHistory.onclick = () => this.switchTab("history");
@@ -201,15 +256,17 @@ var DeepVaultView = class extends import_obsidian.ItemView {
   switchTab(tab) {
     var _a;
     this.activeTab = tab;
-    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabHistory];
-    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelHistory];
+    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabTemplates, this.tabHistory];
+    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelTemplates, this.panelHistory];
     tabs.forEach((t) => t.removeClass("dv-tab-active"));
     panels.forEach((p) => p.addClass("dv-hidden"));
-    const map = { research: 0, chat: 1, synthesis: 2, history: 3 };
+    const map = { research: 0, chat: 1, synthesis: 2, templates: 3, history: 4 };
     tabs[map[tab]].addClass("dv-tab-active");
     panels[map[tab]].removeClass("dv-hidden");
     if (tab === "chat")
       (_a = this.chatInputEl) == null ? void 0 : _a.focus();
+    if (tab === "templates")
+      this.renderTemplates();
     if (tab === "history")
       this.renderHistory();
   }
@@ -472,6 +529,113 @@ ${combinedNotes}`
     }
     this.setStatus("");
   }
+  // ─── Templates Panel (v3.0.1) ─────────────────────────────────────────────
+  buildPanelTemplates(root) {
+    this.panelTemplates = root.createDiv("dv-panel");
+  }
+  renderTemplates() {
+    this.panelTemplates.empty();
+    const headerRow = this.panelTemplates.createDiv("dv-templates-header");
+    headerRow.createEl("p", { text: "MY TEMPLATES", cls: "dv-section-label" });
+    const newBtn = headerRow.createEl("button", { text: "+ New", cls: "dv-btn-new-template" });
+    newBtn.onclick = () => this.openTemplateEditor();
+    const templates = this.plugin.settings.templates;
+    if (templates.length === 0) {
+      const empty = this.panelTemplates.createDiv("dv-empty-state");
+      empty.createEl("p", { text: "\u{1F4DD}", cls: "dv-empty-icon" });
+      empty.createEl("p", { text: "No templates yet", cls: "dv-empty-title" });
+      empty.createEl("p", { text: "Create your first reusable prompt template", cls: "dv-empty-desc" });
+      return;
+    }
+    const list = this.panelTemplates.createDiv("dv-template-list");
+    for (const tpl of templates) {
+      this.renderTemplateCard(list, tpl);
+    }
+    this.panelTemplates.createEl("p", {
+      text: "\u{1F4A1} Tip: Templates with Note Context use your open note as input.",
+      cls: "dv-template-tip"
+    });
+  }
+  renderTemplateCard(container, tpl) {
+    const card = container.createDiv("dv-template-card");
+    const cardTop = card.createDiv("dv-template-card-top");
+    cardTop.createEl("span", { text: tpl.icon, cls: "dv-template-icon" });
+    const cardInfo = cardTop.createDiv("dv-template-info");
+    cardInfo.createEl("p", { text: tpl.name, cls: "dv-template-name" });
+    cardInfo.createEl("p", { text: tpl.prompt.slice(0, 60) + (tpl.prompt.length > 60 ? "..." : ""), cls: "dv-template-preview" });
+    const cardBadge = cardTop.createDiv("dv-template-badges");
+    if (tpl.useNoteContext) {
+      cardBadge.createEl("span", { text: "\u{1F4C4} Note", cls: "dv-template-badge" });
+    }
+    const cardActions = card.createDiv("dv-template-card-actions");
+    const runBtn = cardActions.createEl("button", { text: "\u25B6 Run", cls: "dv-btn-run-template" });
+    runBtn.onclick = () => this.runTemplate(tpl);
+    const editBtn = cardActions.createEl("button", { text: "\u270F\uFE0F Edit", cls: "dv-btn-ghost-sm" });
+    editBtn.onclick = () => this.openTemplateEditor(tpl);
+    const deleteBtn = cardActions.createEl("button", { text: "\u{1F5D1}", cls: "dv-btn-ghost-sm dv-btn-delete" });
+    deleteBtn.onclick = async () => {
+      this.plugin.settings.templates = this.plugin.settings.templates.filter((t) => t.id !== tpl.id);
+      await this.plugin.saveSettings();
+      this.renderTemplates();
+      new import_obsidian.Notice(`Template "${tpl.name}" deleted.`);
+    };
+  }
+  openTemplateEditor(existing) {
+    new TemplateEditorModal(this.app, existing, async (tpl) => {
+      if (existing) {
+        const idx = this.plugin.settings.templates.findIndex((t) => t.id === existing.id);
+        if (idx !== -1)
+          this.plugin.settings.templates[idx] = tpl;
+      } else {
+        this.plugin.settings.templates.push(tpl);
+      }
+      await this.plugin.saveSettings();
+      this.renderTemplates();
+      new import_obsidian.Notice(`Template "${tpl.name}" ${existing ? "updated" : "created"}!`);
+    }).open();
+  }
+  async runTemplate(tpl) {
+    var _a, _b;
+    const note = this.getCurrentNote();
+    if (tpl.useNoteContext && !note) {
+      new import_obsidian.Notice("This template needs an open note. Please open a note first.");
+      return;
+    }
+    this.switchTab("research");
+    const prompt = tpl.useNoteContext && note ? `${tpl.prompt}
+
+# ${note.title}
+
+${note.content.slice(0, 3e3)}` : tpl.prompt;
+    this.setStatus(`\u23F3 Running "${tpl.name}"...`);
+    this.responseEl.empty();
+    this.responseEl.createEl("p", { text: `\u23F3 Running template: ${tpl.icon} ${tpl.name}...`, cls: "dv-thinking" });
+    (_a = this._exportRow) == null ? void 0 : _a.addClass("dv-hidden");
+    if (!this.plugin.settings.apiKey) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: "\u26A0\uFE0F Add your API key in Settings \u2192 Deep Vault", cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompt }], false);
+      this.responseEl.empty();
+      renderMarkdown(this.responseEl, result);
+      this.lastResponse = result;
+      (_b = this._exportRow) == null ? void 0 : _b.removeClass("dv-hidden");
+      this.chatHistory.push({
+        role: "user",
+        content: `[Template: ${tpl.name}]${note ? ` on note "${note.title}"` : ""}`,
+        timestamp: new Date(),
+        noteTitle: note == null ? void 0 : note.title
+      });
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+    } catch (err) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: `\u274C ${err.message}`, cls: "dv-error" });
+    }
+    this.setStatus("");
+  }
   // ─── History Panel ────────────────────────────────────────────────────────
   buildPanelHistory(root) {
     this.panelHistory = root.createDiv("dv-panel");
@@ -708,6 +872,88 @@ ${note.content}`
   async onClose() {
   }
 };
+var TemplateEditorModal = class extends import_obsidian.Modal {
+  constructor(app, existing, onSave) {
+    super(app);
+    this.existing = existing;
+    this.onSave = onSave;
+  }
+  onOpen() {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("dv-modal");
+    contentEl.createEl("h2", { text: this.existing ? "\u270F\uFE0F Edit Template" : "\u{1F4DD} New Template", cls: "dv-modal-title" });
+    contentEl.createEl("label", { text: "Template Name", cls: "dv-modal-label" });
+    const nameInput = contentEl.createEl("input", {
+      cls: "dv-modal-input",
+      attr: { type: "text", placeholder: "e.g. Meeting Summary", value: (_b = (_a = this.existing) == null ? void 0 : _a.name) != null ? _b : "" }
+    });
+    contentEl.createEl("label", { text: "Icon (emoji)", cls: "dv-modal-label" });
+    const iconInput = contentEl.createEl("input", {
+      cls: "dv-modal-input dv-modal-input-sm",
+      attr: { type: "text", placeholder: "\u{1F4DD}", value: (_d = (_c = this.existing) == null ? void 0 : _c.icon) != null ? _d : "\u{1F4DD}" }
+    });
+    contentEl.createEl("label", { text: "Prompt", cls: "dv-modal-label" });
+    contentEl.createEl("p", { text: "Write your prompt. Claude will receive this, optionally followed by your note content.", cls: "dv-modal-hint" });
+    const promptInput = contentEl.createEl("textarea", {
+      cls: "dv-modal-textarea",
+      attr: { placeholder: "e.g. Summarise this note as a bullet list suitable for a team standup..." }
+    });
+    promptInput.value = (_f = (_e = this.existing) == null ? void 0 : _e.prompt) != null ? _f : "";
+    const toggleRow = contentEl.createDiv("dv-modal-toggle-row");
+    toggleRow.createEl("label", { text: "Include current note as context", cls: "dv-modal-toggle-label" });
+    const toggleInput = toggleRow.createEl("input", {
+      attr: { type: "checkbox" }
+    });
+    toggleInput.checked = (_h = (_g = this.existing) == null ? void 0 : _g.useNoteContext) != null ? _h : true;
+    contentEl.createEl("p", { text: "Quick insert:", cls: "dv-modal-label" });
+    const varRow = contentEl.createDiv("dv-modal-var-row");
+    const vars = [
+      { label: "{{note_title}}", desc: "Note title" },
+      { label: "{{date}}", desc: "Today's date" }
+    ];
+    for (const v of vars) {
+      const chip = varRow.createEl("button", { text: v.label, cls: "dv-var-chip", attr: { title: v.desc } });
+      chip.onclick = () => {
+        var _a2;
+        const pos = (_a2 = promptInput.selectionStart) != null ? _a2 : promptInput.value.length;
+        promptInput.value = promptInput.value.slice(0, pos) + v.label + promptInput.value.slice(pos);
+        promptInput.focus();
+      };
+    }
+    const btnRow = contentEl.createDiv("dv-modal-btn-row");
+    const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "dv-btn-ghost" });
+    cancelBtn.onclick = () => this.close();
+    const saveBtn = btnRow.createEl("button", { text: this.existing ? "Save Changes" : "Create Template", cls: "dv-btn-primary" });
+    saveBtn.onclick = () => {
+      var _a2, _b2, _c2, _d2;
+      const name = nameInput.value.trim();
+      const prompt = promptInput.value.trim();
+      if (!name) {
+        new import_obsidian.Notice("Please enter a template name.");
+        return;
+      }
+      if (!prompt) {
+        new import_obsidian.Notice("Please enter a prompt.");
+        return;
+      }
+      const tpl = {
+        id: (_b2 = (_a2 = this.existing) == null ? void 0 : _a2.id) != null ? _b2 : `tpl-${Date.now()}`,
+        name,
+        icon: iconInput.value.trim() || "\u{1F4DD}",
+        prompt,
+        useNoteContext: toggleInput.checked,
+        createdAt: (_d2 = (_c2 = this.existing) == null ? void 0 : _c2.createdAt) != null ? _d2 : new Date().toISOString()
+      };
+      this.onSave(tpl);
+      this.close();
+    };
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 var DeepVaultPlugin = class extends import_obsidian.Plugin {
   async onload() {
     await this.loadSettings();
@@ -723,7 +969,7 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
       }
     });
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v2.3 loaded \u2705");
+    console.log("Deep Vault v3.0.1 loaded \u2705");
   }
   async activateView() {
     const { workspace } = this.app;
@@ -773,11 +1019,26 @@ var DeepVaultSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.exportFolder = value || "Deep Vault Exports";
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h3", { text: "What's New in v2.3" });
+    containerEl.createEl("h3", { text: "What's New in v3.0" });
     const ul = containerEl.createEl("ul");
+    ul.createEl("li", { text: "\u{1F4DD} Custom Templates \u2014 save and reuse your own prompts" });
     ul.createEl("li", { text: "\u{1F517} Synthesis tab \u2014 combine & compare multiple notes" });
     ul.createEl("li", { text: "\u{1F4BE} Export any response directly as a new Obsidian note" });
     ul.createEl("li", { text: "\u{1F310} Web search \u2014 Claude can search the internet from Chat" });
     ul.createEl("li", { text: "\u{1F4CB} History export \u2014 save your entire session as a note" });
+    containerEl.createEl("h3", { text: "Prompt Templates" });
+    const tplCount = this.plugin.settings.templates.length;
+    containerEl.createEl("p", {
+      text: `You have ${tplCount} template${tplCount !== 1 ? "s" : ""}. Manage them from the \u{1F4DD} Templates tab in the Deep Vault panel.`,
+      cls: "setting-item-description"
+    });
+    const resetBtn = containerEl.createEl("button", { text: "Reset to Default Templates", cls: "mod-warning" });
+    resetBtn.style.marginTop = "8px";
+    resetBtn.onclick = async () => {
+      this.plugin.settings.templates = DEFAULT_TEMPLATES;
+      await this.plugin.saveSettings();
+      new import_obsidian.Notice("Templates reset to defaults.");
+      this.display();
+    };
   }
 };
