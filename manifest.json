@@ -1,0 +1,11 @@
+{
+  "id": "deep-vault",
+  "name": "Deep Vault",
+  "version": "2.3.0",
+  "minAppVersion": "0.15.0",
+  "description": "AI-powered research assistant for Obsidian using Claude. Summarize notes, ask questions, synthesize ideas, and discover connections across your vault.",
+  "author": "Deep Vault",
+  "authorUrl": "https://github.com/your-username/deep-vault",
+  "fundingUrl": "https://buymeacoffee.com/your-username",
+  "isDesktopOnly": false
+}

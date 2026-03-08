@@ -1,0 +1,857 @@
+import {
+  App,
+  Editor,
+  MarkdownView,
+  Notice,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+  ItemView,
+  WorkspaceLeaf,
+  TFile,
+  SuggestModal,
+} from "obsidian";
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const DEEP_VAULT_VIEW = "deep-vault-view";
+const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  noteTitle?: string;
+}
+
+interface DeepVaultSettings {
+  apiKey: string;
+  model: string;
+  maxTokens: number;
+  enableWebSearch: boolean;
+  exportFolder: string;
+}
+
+const DEFAULT_SETTINGS: DeepVaultSettings = {
+  apiKey: "",
+  model: DEFAULT_MODEL,
+  maxTokens: 2000,
+  enableWebSearch: true,
+  exportFolder: "Deep Vault Exports",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+function slugify(text: string): string {
+  return text.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 60);
+}
+
+function renderMarkdown(container: HTMLElement, text: string) {
+  container.empty();
+  const lines = text.split("\n");
+  let inList = false;
+  let listEl: HTMLElement | null = null;
+
+  for (const line of lines) {
+    if (line.startsWith("### ")) {
+      if (inList) { inList = false; listEl = null; }
+      container.createEl("h4", { text: line.slice(4), cls: "dv-md-h3" });
+    } else if (line.startsWith("## ")) {
+      if (inList) { inList = false; listEl = null; }
+      container.createEl("h3", { text: line.slice(3), cls: "dv-md-h2" });
+    } else if (line.startsWith("# ")) {
+      if (inList) { inList = false; listEl = null; }
+      container.createEl("h2", { text: line.slice(2), cls: "dv-md-h1" });
+    } else if (line.startsWith("- ") || line.startsWith("• ")) {
+      if (!inList) { listEl = container.createEl("ul", { cls: "dv-md-list" }); inList = true; }
+      listEl!.createEl("li", { text: line.slice(2), cls: "dv-md-li" });
+    } else if (line.match(/^\d+\. /)) {
+      if (!inList) { listEl = container.createEl("ol", { cls: "dv-md-list" }); inList = true; }
+      listEl!.createEl("li", { text: line.replace(/^\d+\. /, ""), cls: "dv-md-li" });
+    } else if (line.startsWith("> ")) {
+      if (inList) { inList = false; listEl = null; }
+      container.createEl("blockquote", { text: line.slice(2), cls: "dv-md-quote" });
+    } else if (line.trim() === "") {
+      if (inList) { inList = false; listEl = null; }
+    } else {
+      if (inList) { inList = false; listEl = null; }
+      const p = container.createEl("p", { cls: "dv-md-p" });
+      const parts = line.split(/\*\*(.*?)\*\*/g);
+      parts.forEach((part, i) => {
+        if (i % 2 === 1) p.createEl("strong", { text: part });
+        else if (part) p.appendText(part);
+      });
+    }
+  }
+}
+
+// ─── Note Picker Modal ────────────────────────────────────────────────────────
+
+class NoteSuggestModal extends SuggestModal<TFile> {
+  private files: TFile[];
+  private onSelect: (files: TFile[]) => void;
+  private selected: TFile[] = [];
+
+  constructor(app: App, files: TFile[], onSelect: (files: TFile[]) => void) {
+    super(app);
+    this.files = files;
+    this.onSelect = onSelect;
+    this.setPlaceholder("Search and select notes to synthesize (Enter to add, Esc when done)...");
+  }
+
+  getSuggestions(query: string): TFile[] {
+    return this.files.filter(f =>
+      f.basename.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 20);
+  }
+
+  renderSuggestion(file: TFile, el: HTMLElement) {
+    const isSelected = this.selected.includes(file);
+    el.createEl("div", {
+      text: `${isSelected ? "✅ " : ""}${file.basename}`,
+      cls: isSelected ? "dv-modal-selected" : ""
+    });
+    el.createEl("small", { text: file.path, cls: "dv-modal-path" });
+  }
+
+  onChooseSuggestion(file: TFile) {
+    if (!this.selected.includes(file)) {
+      this.selected.push(file);
+      new Notice(`Added: ${file.basename} (${this.selected.length} selected)`);
+    } else {
+      this.selected = this.selected.filter(f => f !== file);
+      new Notice(`Removed: ${file.basename}`);
+    }
+    if (this.selected.length > 0) {
+      this.onSelect(this.selected);
+    }
+  }
+}
+
+// ─── Main Sidebar View ────────────────────────────────────────────────────────
+
+class DeepVaultView extends ItemView {
+  private plugin: DeepVaultPlugin;
+  private chatHistory: ChatMessage[] = [];
+  private activeTab: "research" | "chat" | "synthesis" | "history" = "research";
+  private lastResponse: string = "";
+
+  // UI elements
+  private tabResearch: HTMLElement;
+  private tabChat: HTMLElement;
+  private tabSynthesis: HTMLElement;
+  private tabHistory: HTMLElement;
+  private panelResearch: HTMLElement;
+  private panelChat: HTMLElement;
+  private panelSynthesis: HTMLElement;
+  private panelHistory: HTMLElement;
+  private chatMessagesEl: HTMLElement;
+  private chatInputEl: HTMLTextAreaElement;
+  private statusEl: HTMLElement;
+  private _responseEl: HTMLElement;
+
+  constructor(leaf: WorkspaceLeaf, plugin: DeepVaultPlugin) {
+    super(leaf);
+    this.plugin = plugin;
+  }
+
+  getViewType() { return DEEP_VAULT_VIEW; }
+  getDisplayText() { return "Deep Vault"; }
+  getIcon() { return "search"; }
+
+  async onOpen() {
+    const root = this.containerEl.children[1] as HTMLElement;
+    root.empty();
+    root.addClass("dv-root");
+    this.buildHeader(root);
+    this.buildTabs(root);
+    this.buildPanelResearch(root);
+    this.buildPanelChat(root);
+    this.buildPanelSynthesis(root);
+    this.buildPanelHistory(root);
+    this.statusEl = root.createDiv("dv-status");
+    this.switchTab("research");
+  }
+
+  // ─── Header ───────────────────────────────────────────────────────────────
+
+  private buildHeader(root: HTMLElement) {
+    const header = root.createDiv("dv-header");
+    const left = header.createDiv("dv-header-left");
+    left.createEl("span", { text: "🔍", cls: "dv-logo" });
+    const titles = left.createDiv("dv-header-titles");
+    titles.createEl("h2", { text: "Deep Vault", cls: "dv-title" });
+    titles.createEl("p", { text: "AI Research Assistant", cls: "dv-subtitle" });
+    const badge = header.createDiv("dv-badge");
+    badge.createEl("span", { text: "Claude", cls: "dv-badge-text" });
+  }
+
+  // ─── Tabs ─────────────────────────────────────────────────────────────────
+
+  private buildTabs(root: HTMLElement) {
+    const tabBar = root.createDiv("dv-tab-bar");
+
+    this.tabResearch = tabBar.createDiv("dv-tab");
+    this.tabResearch.innerHTML = "🔬 Research";
+    this.tabResearch.onclick = () => this.switchTab("research");
+
+    this.tabChat = tabBar.createDiv("dv-tab");
+    this.tabChat.innerHTML = "💬 Chat";
+    this.tabChat.onclick = () => this.switchTab("chat");
+
+    this.tabSynthesis = tabBar.createDiv("dv-tab");
+    this.tabSynthesis.innerHTML = "🔗 Synthesis";
+    this.tabSynthesis.onclick = () => this.switchTab("synthesis");
+
+    this.tabHistory = tabBar.createDiv("dv-tab");
+    this.tabHistory.innerHTML = "📋 History";
+    this.tabHistory.onclick = () => this.switchTab("history");
+  }
+
+  private switchTab(tab: "research" | "chat" | "synthesis" | "history") {
+    this.activeTab = tab;
+    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabHistory];
+    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelHistory];
+    tabs.forEach(t => t.removeClass("dv-tab-active"));
+    panels.forEach(p => p.addClass("dv-hidden"));
+
+    const map = { research: 0, chat: 1, synthesis: 2, history: 3 };
+    tabs[map[tab]].addClass("dv-tab-active");
+    panels[map[tab]].removeClass("dv-hidden");
+
+    if (tab === "chat") this.chatInputEl?.focus();
+    if (tab === "history") this.renderHistory();
+  }
+
+  // ─── Research Panel ───────────────────────────────────────────────────────
+
+  private buildPanelResearch(root: HTMLElement) {
+    this.panelResearch = root.createDiv("dv-panel");
+
+    const noteInfo = this.panelResearch.createDiv("dv-note-info");
+    noteInfo.createEl("span", { text: "📄 Uses your currently open note as context", cls: "dv-note-label" });
+
+    this.panelResearch.createEl("p", { text: "QUICK ACTIONS", cls: "dv-section-label" });
+    const grid = this.panelResearch.createDiv("dv-action-grid");
+
+    const actions = [
+      { icon: "📄", label: "Summarize", action: "summarize", desc: "Key points from this note" },
+      { icon: "❓", label: "Questions", action: "questions", desc: "Research questions to explore" },
+      { icon: "💡", label: "Concepts", action: "concepts", desc: "Extract core ideas & terms" },
+      { icon: "🔭", label: "Gaps", action: "gaps", desc: "Missing info & research gaps" },
+      { icon: "🔗", label: "Connections", action: "connections", desc: "Links to other ideas" },
+      { icon: "📚", label: "Literature", action: "literature", desc: "Related research areas" },
+    ];
+
+    for (const a of actions) {
+      const card = grid.createDiv("dv-action-card");
+      card.createEl("span", { text: a.icon, cls: "dv-action-icon" });
+      card.createEl("span", { text: a.label, cls: "dv-action-label" });
+      card.createEl("span", { text: a.desc, cls: "dv-action-desc" });
+      card.onclick = () => this.runQuickAction(a.action);
+    }
+
+    this.panelResearch.createEl("p", { text: "RESPONSE", cls: "dv-section-label dv-section-label-top" });
+    const responseWrap = this.panelResearch.createDiv("dv-response-wrap");
+    this._responseEl = responseWrap.createDiv("dv-response");
+    this._responseEl.createEl("p", { text: "Select a Quick Action above.", cls: "dv-placeholder" });
+
+    // Export button (hidden until there's a response)
+    const exportRow = this.panelResearch.createDiv("dv-export-row dv-hidden");
+    const exportBtn = exportRow.createEl("button", { text: "💾 Save as Note", cls: "dv-btn-export" });
+    exportBtn.onclick = () => this.exportToNote(this.lastResponse, "Research Result");
+    (this as any)._exportRow = exportRow;
+  }
+
+  private get responseEl(): HTMLElement { return this._responseEl; }
+
+  // ─── Chat Panel ───────────────────────────────────────────────────────────
+
+  private buildPanelChat(root: HTMLElement) {
+    this.panelChat = root.createDiv("dv-panel dv-panel-chat");
+    this.chatMessagesEl = this.panelChat.createDiv("dv-chat-messages");
+    this.renderWelcomeMessage();
+
+    const inputArea = this.panelChat.createDiv("dv-chat-input-area");
+    this.chatInputEl = inputArea.createEl("textarea", {
+      cls: "dv-chat-input",
+      attr: { placeholder: "Ask anything... (Enter to send, Shift+Enter for new line)" },
+    });
+
+    this.chatInputEl.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.sendChatMessage(); }
+    });
+
+    const inputFooter = inputArea.createDiv("dv-chat-input-footer");
+
+    const clearBtn = inputFooter.createEl("button", { text: "🗑 Clear", cls: "dv-btn-ghost" });
+    clearBtn.onclick = () => this.clearChat();
+
+    const useNoteBtn = inputFooter.createEl("button", { text: "📄 Use Note", cls: "dv-btn-ghost" });
+    useNoteBtn.onclick = () => {
+      const note = this.getCurrentNote();
+      if (note) { this.chatInputEl.value = `Based on my note "${note.title}": `; this.chatInputEl.focus(); }
+      else new Notice("Open a note first.");
+    };
+
+    const webBtn = inputFooter.createEl("button", { text: "🌐 Web", cls: "dv-btn-ghost dv-web-toggle" });
+    webBtn.title = "Toggle web search for this query";
+    (this as any)._webEnabled = false;
+    webBtn.onclick = () => {
+      (this as any)._webEnabled = !(this as any)._webEnabled;
+      webBtn.toggleClass("dv-web-active", (this as any)._webEnabled);
+      webBtn.setText((this as any)._webEnabled ? "🌐 Web ON" : "🌐 Web");
+    };
+
+    const sendBtn = inputFooter.createEl("button", { text: "Send →", cls: "dv-btn-primary" });
+    sendBtn.onclick = () => this.sendChatMessage();
+  }
+
+  private renderWelcomeMessage() {
+    this.chatMessagesEl.empty();
+    const welcome = this.chatMessagesEl.createDiv("dv-chat-welcome");
+    welcome.createEl("p", { text: "👋 Hi! I'm Deep Vault.", cls: "dv-welcome-title" });
+    welcome.createEl("p", { text: "Ask me anything about your research. Enable 🌐 Web to search the internet for current information.", cls: "dv-welcome-text" });
+
+    const tips = welcome.createDiv("dv-welcome-tips");
+    const examples = [
+      "What are the key themes in my note?",
+      "Fact-check the claims in my current note",
+      "What recent research exists on this topic?",
+    ];
+    for (const ex of examples) {
+      const tip = tips.createEl("button", { text: `"${ex}"`, cls: "dv-example-btn" });
+      tip.onclick = () => { this.chatInputEl.value = ex; this.chatInputEl.focus(); };
+    }
+  }
+
+  private async sendChatMessage() {
+    const input = this.chatInputEl.value.trim();
+    if (!input) return;
+
+    const note = this.getCurrentNote();
+    const useWeb = (this as any)._webEnabled && this.plugin.settings.enableWebSearch;
+    this.chatInputEl.value = "";
+
+    this.addChatBubble("user", input, note?.title);
+
+    const messages = this.chatHistory
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => ({ role: m.role, content: m.content }));
+
+    const userContent = note
+      ? `Context from note "${note.title}":\n\n${note.content.slice(0, 3000)}\n\n---\n\n${input}`
+      : input;
+
+    messages.push({ role: "user", content: userContent });
+    this.chatHistory.push({ role: "user", content: input, timestamp: new Date(), noteTitle: note?.title });
+
+    await this.callClaudeChat(messages, useWeb);
+  }
+
+  private addChatBubble(role: "user" | "assistant", content: string, noteTitle?: string): HTMLElement {
+    const welcome = this.chatMessagesEl.querySelector(".dv-chat-welcome");
+    if (welcome) welcome.remove();
+
+    const wrap = this.chatMessagesEl.createDiv(`dv-bubble-wrap dv-bubble-${role}`);
+
+    if (role === "user") {
+      if (noteTitle) wrap.createEl("span", { text: `📄 ${noteTitle}`, cls: "dv-bubble-note" });
+      wrap.createEl("div", { text: content, cls: "dv-bubble dv-bubble-user" });
+    } else {
+      const bubble = wrap.createDiv("dv-bubble dv-bubble-assistant");
+      if (content === "...") {
+        bubble.createEl("span", { text: "⏳ Thinking...", cls: "dv-thinking" });
+      } else {
+        renderMarkdown(bubble, content);
+
+        // Export button on each assistant message
+        const exportBtn = wrap.createEl("button", { text: "💾 Save as Note", cls: "dv-btn-export-inline" });
+        exportBtn.onclick = () => this.exportToNote(content, "Chat Response");
+      }
+    }
+
+    wrap.createEl("span", { text: formatTime(new Date()), cls: "dv-bubble-time" });
+    this.chatMessagesEl.scrollTop = this.chatMessagesEl.scrollHeight;
+    return wrap;
+  }
+
+  private clearChat() {
+    this.chatHistory = [];
+    this.renderWelcomeMessage();
+    new Notice("Chat cleared.");
+  }
+
+  // ─── Synthesis Panel (v2.1) ───────────────────────────────────────────────
+
+  private buildPanelSynthesis(root: HTMLElement) {
+    this.panelSynthesis = root.createDiv("dv-panel");
+
+    this.panelSynthesis.createEl("p", { text: "MULTI-NOTE SYNTHESIS", cls: "dv-section-label" });
+    this.panelSynthesis.createEl("p", {
+      text: "Select multiple notes from your vault to synthesize, compare, or review together.",
+      cls: "dv-synthesis-desc"
+    });
+
+    // Selected notes display
+    const selectedArea = this.panelSynthesis.createDiv("dv-selected-notes");
+    selectedArea.createEl("p", { text: "No notes selected yet.", cls: "dv-placeholder", attr: { id: "dv-selected-label" } });
+    (this as any)._selectedNotes = [] as TFile[];
+    (this as any)._selectedArea = selectedArea;
+
+    // Browse button
+    const browseBtn = this.panelSynthesis.createEl("button", { text: "📂 Browse & Select Notes", cls: "dv-btn-browse" });
+    browseBtn.onclick = () => this.openNotePicker();
+
+    // Synthesis type
+    this.panelSynthesis.createEl("p", { text: "SYNTHESIS TYPE", cls: "dv-section-label dv-section-label-top" });
+    const synthGrid = this.panelSynthesis.createDiv("dv-synth-grid");
+
+    const synthActions = [
+      { icon: "📝", label: "Summarize All", action: "synth-summarize", desc: "Combined summary" },
+      { icon: "🔍", label: "Compare", action: "synth-compare", desc: "Similarities & differences" },
+      { icon: "🧩", label: "Connect", action: "synth-connect", desc: "Find common themes" },
+      { icon: "📖", label: "Lit Review", action: "synth-litreview", desc: "Academic overview" },
+    ];
+
+    for (const a of synthActions) {
+      const card = synthGrid.createDiv("dv-action-card");
+      card.createEl("span", { text: a.icon, cls: "dv-action-icon" });
+      card.createEl("span", { text: a.label, cls: "dv-action-label" });
+      card.createEl("span", { text: a.desc, cls: "dv-action-desc" });
+      card.onclick = () => this.runSynthesis(a.action);
+    }
+
+    // Response
+    this.panelSynthesis.createEl("p", { text: "SYNTHESIS RESULT", cls: "dv-section-label dv-section-label-top" });
+    const synthResponseWrap = this.panelSynthesis.createDiv("dv-response-wrap");
+    const synthResponse = synthResponseWrap.createDiv("dv-response");
+    synthResponse.createEl("p", { text: "Select notes and choose a synthesis type.", cls: "dv-placeholder" });
+    (this as any)._synthResponseEl = synthResponse;
+
+    const synthExportRow = this.panelSynthesis.createDiv("dv-export-row dv-hidden");
+    const synthExportBtn = synthExportRow.createEl("button", { text: "💾 Save Synthesis as Note", cls: "dv-btn-export" });
+    synthExportBtn.onclick = () => this.exportToNote((this as any)._lastSynthResponse ?? "", "Synthesis");
+    (this as any)._synthExportRow = synthExportRow;
+  }
+
+  private openNotePicker() {
+    const files = this.app.vault.getMarkdownFiles();
+    new NoteSuggestModal(this.app, files, (selected: TFile[]) => {
+      (this as any)._selectedNotes = selected;
+      this.updateSelectedNotesUI();
+    }).open();
+  }
+
+  private updateSelectedNotesUI() {
+    const area = (this as any)._selectedArea as HTMLElement;
+    area.empty();
+    const notes = (this as any)._selectedNotes as TFile[];
+    if (notes.length === 0) {
+      area.createEl("p", { text: "No notes selected yet.", cls: "dv-placeholder" });
+      return;
+    }
+    area.createEl("p", { text: `${notes.length} note${notes.length > 1 ? "s" : ""} selected:`, cls: "dv-selected-count" });
+    for (const f of notes) {
+      const tag = area.createDiv("dv-note-tag");
+      tag.createEl("span", { text: f.basename });
+      const removeBtn = tag.createEl("span", { text: " ✕", cls: "dv-note-tag-remove" });
+      removeBtn.onclick = () => {
+        (this as any)._selectedNotes = notes.filter((n: TFile) => n !== f);
+        this.updateSelectedNotesUI();
+      };
+    }
+  }
+
+  private async runSynthesis(action: string) {
+    const notes = (this as any)._selectedNotes as TFile[];
+    if (notes.length < 2) {
+      new Notice("Please select at least 2 notes to synthesize.");
+      return;
+    }
+
+    const synthResponseEl = (this as any)._synthResponseEl as HTMLElement;
+    synthResponseEl.empty();
+    synthResponseEl.createEl("p", { text: "⏳ Synthesizing notes...", cls: "dv-thinking" });
+    this.setStatus("⏳ Synthesizing...");
+
+    // Read all note contents
+    const noteContents: string[] = [];
+    for (const file of notes) {
+      const content = await this.app.vault.read(file);
+      noteContents.push(`## ${file.basename}\n\n${content.slice(0, 2000)}`);
+    }
+
+    const combinedNotes = noteContents.join("\n\n---\n\n");
+
+    const prompts: Record<string, string> = {
+      "synth-summarize": `Provide a unified summary across all these research notes, highlighting the most important ideas from each:\n\n${combinedNotes}`,
+      "synth-compare": `Compare and contrast these research notes. What are the key similarities and differences?\n\n${combinedNotes}`,
+      "synth-connect": `Identify the common themes, connections, and patterns across these research notes:\n\n${combinedNotes}`,
+      "synth-litreview": `Write a structured literature review based on these notes, as if preparing an academic overview of the topic:\n\n${combinedNotes}`,
+    };
+
+    if (!this.plugin.settings.apiKey) {
+      synthResponseEl.empty();
+      synthResponseEl.createEl("p", { text: "⚠️ Add your API key in Settings → Deep Vault", cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompts[action] }], false);
+      synthResponseEl.empty();
+      renderMarkdown(synthResponseEl, result);
+      (this as any)._lastSynthResponse = result;
+      (this as any)._synthExportRow.removeClass("dv-hidden");
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+    } catch (err) {
+      synthResponseEl.empty();
+      synthResponseEl.createEl("p", { text: `❌ ${err.message}`, cls: "dv-error" });
+    }
+
+    this.setStatus("");
+  }
+
+  // ─── History Panel ────────────────────────────────────────────────────────
+
+  private buildPanelHistory(root: HTMLElement) {
+    this.panelHistory = root.createDiv("dv-panel");
+  }
+
+  private renderHistory() {
+    this.panelHistory.empty();
+    this.panelHistory.createEl("p", { text: "SESSION HISTORY", cls: "dv-section-label" });
+
+    if (this.chatHistory.length === 0) {
+      const empty = this.panelHistory.createDiv("dv-empty-state");
+      empty.createEl("p", { text: "📭", cls: "dv-empty-icon" });
+      empty.createEl("p", { text: "No history yet", cls: "dv-empty-title" });
+      empty.createEl("p", { text: "Start a conversation in Chat or run a Quick Action", cls: "dv-empty-desc" });
+      return;
+    }
+
+    // Export all history button
+    const exportAllBtn = this.panelHistory.createEl("button", { text: "💾 Export Full History as Note", cls: "dv-btn-export" });
+    exportAllBtn.onclick = () => this.exportHistoryToNote();
+
+    const list = this.panelHistory.createDiv("dv-history-list");
+    for (const msg of [...this.chatHistory].reverse()) {
+      const item = list.createDiv(`dv-history-item dv-history-${msg.role}`);
+      const itemHeader = item.createDiv("dv-history-item-header");
+      itemHeader.createEl("span", { text: msg.role === "user" ? "You" : "Claude", cls: "dv-history-role" });
+      itemHeader.createEl("span", { text: formatTime(msg.timestamp), cls: "dv-history-time" });
+      if (msg.noteTitle) item.createEl("span", { text: `📄 ${msg.noteTitle}`, cls: "dv-history-note" });
+      item.createEl("p", { text: msg.content.slice(0, 140) + (msg.content.length > 140 ? "..." : ""), cls: "dv-history-preview" });
+
+      // Individual export
+      const saveBtn = item.createEl("button", { text: "💾 Save", cls: "dv-btn-save-small" });
+      saveBtn.onclick = () => this.exportToNote(msg.content, msg.role === "user" ? "My Question" : "Claude Response");
+    }
+
+    const clearBtn = this.panelHistory.createEl("button", { text: "🗑 Clear All History", cls: "dv-btn-danger" });
+    clearBtn.onclick = () => { this.chatHistory = []; this.renderHistory(); new Notice("History cleared."); };
+  }
+
+  // ─── Export to Note (v2.2) ────────────────────────────────────────────────
+
+  private async exportToNote(content: string, label: string) {
+    if (!content.trim()) { new Notice("Nothing to export."); return; }
+
+    const folder = this.plugin.settings.exportFolder;
+    const date = formatDate(new Date());
+    const time = formatTime(new Date()).replace(":", "-");
+    const filename = `${folder}/${label} - ${date} ${time}.md`;
+
+    const noteContent = `---
+created: ${new Date().toISOString()}
+source: Deep Vault
+type: ${label}
+---
+
+# ${label}
+*Exported from Deep Vault on ${date}*
+
+---
+
+${content}
+`;
+
+    try {
+      // Ensure folder exists
+      if (!this.app.vault.getAbstractFileByPath(folder)) {
+        await this.app.vault.createFolder(folder);
+      }
+      await this.app.vault.create(filename, noteContent);
+      new Notice(`✅ Saved to "${filename}"`);
+
+      // Open the new note
+      const file = this.app.vault.getAbstractFileByPath(filename) as TFile;
+      if (file) {
+        const leaf = this.app.workspace.getLeaf(true);
+        await leaf.openFile(file);
+      }
+    } catch (err) {
+      new Notice(`❌ Export failed: ${err.message}`);
+    }
+  }
+
+  private async exportHistoryToNote() {
+    if (this.chatHistory.length === 0) { new Notice("No history to export."); return; }
+
+    const lines: string[] = [
+      `---`,
+      `created: ${new Date().toISOString()}`,
+      `source: Deep Vault`,
+      `type: Session History`,
+      `---`,
+      ``,
+      `# Deep Vault Session — ${formatDate(new Date())}`,
+      ``,
+    ];
+
+    for (const msg of this.chatHistory) {
+      lines.push(`## ${msg.role === "user" ? "🧑 You" : "🤖 Claude"} — ${formatTime(msg.timestamp)}`);
+      if (msg.noteTitle) lines.push(`*Context: ${msg.noteTitle}*`);
+      lines.push("");
+      lines.push(msg.content);
+      lines.push("");
+      lines.push("---");
+      lines.push("");
+    }
+
+    await this.exportToNote(lines.join("\n"), "Session History");
+  }
+
+  // ─── API Calls ────────────────────────────────────────────────────────────
+
+  private getCurrentNote(): { content: string; title: string } | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) return null;
+    return { content: view.editor.getValue(), title: view.file?.basename ?? "Untitled" };
+  }
+
+  private setStatus(msg: string) {
+    this.statusEl.empty();
+    if (msg) this.statusEl.createEl("span", { text: msg, cls: "dv-status-text" });
+  }
+
+  private async runQuickAction(action: string) {
+    const note = this.getCurrentNote();
+    if (!note) { new Notice("Please open a note first."); return; }
+
+    const prompts: Record<string, string> = {
+      summarize: `Summarize this research note in 5 clear bullet points:\n\n# ${note.title}\n\n${note.content}`,
+      questions: `Generate 6 insightful research questions to explore next:\n\n# ${note.title}\n\n${note.content}`,
+      concepts: `Extract and briefly explain the 6 most important concepts or terms:\n\n# ${note.title}\n\n${note.content}`,
+      gaps: `Identify research gaps, missing evidence, and areas needing investigation:\n\n# ${note.title}\n\n${note.content}`,
+      connections: `Suggest 5 ways this note connects to other research areas. Be specific:\n\n# ${note.title}\n\n${note.content}`,
+      literature: `Suggest 5 related academic topics, authors, or research areas:\n\n# ${note.title}\n\n${note.content}`,
+    };
+
+    const labels: Record<string, string> = {
+      summarize: "⏳ Summarizing...", questions: "⏳ Generating questions...",
+      concepts: "⏳ Extracting concepts...", gaps: "⏳ Finding gaps...",
+      connections: "⏳ Finding connections...", literature: "⏳ Researching literature...",
+    };
+
+    this.setStatus(labels[action]);
+    this.responseEl.empty();
+    this.responseEl.createEl("p", { text: labels[action], cls: "dv-thinking" });
+    (this as any)._exportRow?.addClass("dv-hidden");
+
+    if (!this.plugin.settings.apiKey) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: "⚠️ Add your API key in Settings → Deep Vault", cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompts[action] }], false);
+      this.responseEl.empty();
+      renderMarkdown(this.responseEl, result);
+      this.lastResponse = result;
+      (this as any)._exportRow?.removeClass("dv-hidden");
+      this.chatHistory.push({ role: "user", content: `[Quick Action: ${action}] on note "${note.title}"`, timestamp: new Date(), noteTitle: note.title });
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+    } catch (err) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: `❌ ${err.message}`, cls: "dv-error" });
+    }
+    this.setStatus("");
+  }
+
+  private async callClaudeChat(messages: { role: string; content: string }[], useWeb: boolean) {
+    if (!this.plugin.settings.apiKey) {
+      this.addChatBubble("assistant", "⚠️ Please add your Anthropic API key in **Settings → Deep Vault**.");
+      return;
+    }
+    const thinkingWrap = this.addChatBubble("assistant", "...");
+    if (useWeb) {
+      const statusMsg = thinkingWrap.querySelector(".dv-thinking");
+      if (statusMsg) statusMsg.textContent = "🌐 Searching the web...";
+    }
+
+    try {
+      const result = await this.callClaude(messages, useWeb);
+      thinkingWrap.remove();
+      this.addChatBubble("assistant", result);
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+    } catch (err) {
+      thinkingWrap.remove();
+      this.addChatBubble("assistant", `❌ Error: ${err.message}`);
+    }
+  }
+
+  private async callClaude(
+    messages: { role: string; content: string }[],
+    useWeb: boolean
+  ): Promise<string> {
+    const body: any = {
+      model: this.plugin.settings.model,
+      max_tokens: this.plugin.settings.maxTokens,
+      system: "You are Deep Vault, an expert research assistant embedded in Obsidian. Help researchers analyze notes, extract insights, identify knowledge gaps, find connections, and synthesize ideas. Be concise, structured, and use markdown formatting. Use bullet points and headers to organize responses clearly.",
+      messages,
+    };
+
+    if (useWeb && this.plugin.settings.enableWebSearch) {
+      body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+    }
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": this.plugin.settings.apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "web-search-2025-03-05",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message ?? `API error ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("\n") || "No response received.";
+  }
+
+  async onClose() { }
+}
+
+// ─── Main Plugin ──────────────────────────────────────────────────────────────
+
+export default class DeepVaultPlugin extends Plugin {
+  settings: DeepVaultSettings;
+
+  async onload() {
+    await this.loadSettings();
+    this.registerView(DEEP_VAULT_VIEW, (leaf) => new DeepVaultView(leaf, this));
+    this.addRibbonIcon("search", "Deep Vault", () => this.activateView());
+
+    this.addCommand({ id: "open-deep-vault", name: "Open Deep Vault panel", callback: () => this.activateView() });
+    this.addCommand({
+      id: "deep-vault-export-note",
+      name: "Export current note analysis to new note",
+      editorCallback: async () => { await this.activateView(); new Notice("Run a Quick Action first, then click 💾 Save as Note."); },
+    });
+
+    this.addSettingTab(new DeepVaultSettingTab(this.app, this));
+    console.log("Deep Vault v2.3 loaded ✅");
+  }
+
+  async activateView() {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(DEEP_VAULT_VIEW)[0];
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false)!;
+      await leaf.setViewState({ type: DEEP_VAULT_VIEW, active: true });
+    }
+    workspace.revealLeaf(leaf);
+  }
+
+  onunload() { this.app.workspace.detachLeavesOfType(DEEP_VAULT_VIEW); }
+  async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
+  async saveSettings() { await this.saveData(this.settings); }
+}
+
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+
+class DeepVaultSettingTab extends PluginSettingTab {
+  plugin: DeepVaultPlugin;
+
+  constructor(app: App, plugin: DeepVaultPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "🔍 Deep Vault Settings" });
+
+    new Setting(containerEl)
+      .setName("Anthropic API Key")
+      .setDesc("Get your key from console.anthropic.com — stored locally, never shared.")
+      .addText(text => text
+        .setPlaceholder("sk-ant-...")
+        .setValue(this.plugin.settings.apiKey)
+        .onChange(async value => { this.plugin.settings.apiKey = value.trim(); await this.plugin.saveSettings(); }));
+
+    new Setting(containerEl)
+      .setName("Claude Model")
+      .setDesc("Sonnet recommended for research. Haiku is faster and cheaper.")
+      .addDropdown(drop => drop
+        .addOption("claude-sonnet-4-20250514", "Claude Sonnet 4 (Recommended)")
+        .addOption("claude-haiku-4-5-20251001", "Claude Haiku 4.5 (Faster)")
+        .setValue(this.plugin.settings.model)
+        .onChange(async value => { this.plugin.settings.model = value; await this.plugin.saveSettings(); }));
+
+    new Setting(containerEl)
+      .setName("Max Response Length")
+      .setDesc("Higher = longer, more detailed responses.")
+      .addSlider(slider => slider
+        .setLimits(500, 4000, 250)
+        .setValue(this.plugin.settings.maxTokens)
+        .setDynamicTooltip()
+        .onChange(async value => { this.plugin.settings.maxTokens = value; await this.plugin.saveSettings(); }));
+
+    new Setting(containerEl)
+      .setName("Enable Web Search")
+      .setDesc("Allow Claude to search the web when the 🌐 Web button is active in Chat.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableWebSearch)
+        .onChange(async value => { this.plugin.settings.enableWebSearch = value; await this.plugin.saveSettings(); }));
+
+    new Setting(containerEl)
+      .setName("Export Folder")
+      .setDesc("Folder in your vault where exported notes will be saved.")
+      .addText(text => text
+        .setPlaceholder("Deep Vault Exports")
+        .setValue(this.plugin.settings.exportFolder)
+        .onChange(async value => { this.plugin.settings.exportFolder = value || "Deep Vault Exports"; await this.plugin.saveSettings(); }));
+
+    containerEl.createEl("h3", { text: "What's New in v2.3" });
+    const ul = containerEl.createEl("ul");
+    ul.createEl("li", { text: "🔗 Synthesis tab — combine & compare multiple notes" });
+    ul.createEl("li", { text: "💾 Export any response directly as a new Obsidian note" });
+    ul.createEl("li", { text: "🌐 Web search — Claude can search the internet from Chat" });
+    ul.createEl("li", { text: "📋 History export — save your entire session as a note" });
+  }
+}

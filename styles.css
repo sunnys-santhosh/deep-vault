@@ -1,0 +1,761 @@
+/* ═══════════════════════════════════════════════
+   Deep Vault v2.0 — UI Styles
+   ═══════════════════════════════════════════════ */
+
+/* ─── Root & Layout ──────────────────────────── */
+
+.dv-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--background-primary);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.dv-hidden {
+  display: none !important;
+}
+
+/* ─── Header ─────────────────────────────────── */
+
+.dv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.dv-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dv-logo {
+  font-size: 20px;
+}
+
+.dv-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-normal);
+  line-height: 1.2;
+}
+
+.dv-subtitle {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.dv-badge {
+  background: var(--interactive-accent);
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+
+.dv-badge-text {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-on-accent);
+  letter-spacing: 0.05em;
+}
+
+/* ─── Tabs ───────────────────────────────────── */
+
+.dv-tab-bar {
+  display: flex;
+  background: var(--background-secondary);
+  border-bottom: 2px solid var(--background-modifier-border);
+  padding: 0 8px;
+  gap: 2px;
+}
+
+.dv-tab {
+  flex: 1;
+  padding: 9px 4px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+  border-radius: 4px 4px 0 0;
+  user-select: none;
+}
+
+.dv-tab:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.dv-tab-active {
+  color: var(--interactive-accent) !important;
+  border-bottom-color: var(--interactive-accent) !important;
+  font-weight: 600;
+}
+
+/* ─── Panels ─────────────────────────────────── */
+
+.dv-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dv-panel-chat {
+  padding: 0;
+  gap: 0;
+}
+
+/* ─── Section Labels ─────────────────────────── */
+
+.dv-section-label {
+  margin: 0 0 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.dv-section-label-top {
+  margin-top: 6px;
+}
+
+/* ─── Note Info ──────────────────────────────── */
+
+.dv-note-info {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.dv-note-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ─── Action Grid ────────────────────────────── */
+
+.dv-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.dv-action-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dv-action-card:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dv-action-icon {
+  font-size: 16px;
+}
+
+.dv-action-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.dv-action-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* ─── Response Area ──────────────────────────── */
+
+.dv-response-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.dv-response {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 100px;
+  max-height: 320px;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+.dv-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+  margin: 0;
+}
+
+.dv-thinking {
+  color: var(--text-muted);
+  font-style: italic;
+  animation: dv-pulse 1.4s infinite;
+}
+
+.dv-error {
+  color: var(--text-error);
+  font-size: 12px;
+  margin: 0;
+}
+
+@keyframes dv-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* ─── Markdown Rendering ─────────────────────── */
+
+.dv-md-h1 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 8px 0 4px;
+  color: var(--text-accent);
+}
+
+.dv-md-h2 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 8px 0 4px;
+  color: var(--text-accent);
+}
+
+.dv-md-h3 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 6px 0 3px;
+  color: var(--text-normal);
+}
+
+.dv-md-p {
+  margin: 3px 0;
+  font-size: 12px;
+}
+
+.dv-md-bold {
+  font-weight: 700;
+  margin: 4px 0 2px;
+  font-size: 12px;
+}
+
+.dv-md-list {
+  margin: 4px 0 4px 14px;
+  padding: 0;
+}
+
+.dv-md-li {
+  margin: 3px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dv-md-quote {
+  border-left: 3px solid var(--interactive-accent);
+  padding: 4px 10px;
+  margin: 6px 0;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* ─── Chat Panel ─────────────────────────────── */
+
+.dv-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.dv-chat-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.dv-welcome-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-normal);
+}
+
+.dv-welcome-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dv-welcome-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dv-example-btn {
+  text-align: left;
+  padding: 7px 10px;
+  background: var(--background-secondary);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dv-example-btn:hover {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+/* ─── Chat Bubbles ───────────────────────────── */
+
+.dv-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 100%;
+}
+
+.dv-bubble-user {
+  align-items: flex-end;
+}
+
+.dv-bubble-assistant {
+  align-items: flex-start;
+}
+
+.dv-bubble {
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  max-width: 92%;
+  word-wrap: break-word;
+}
+
+.dv-bubble-user {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-bottom-right-radius: 3px;
+}
+
+.dv-bubble-assistant {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  border-bottom-left-radius: 3px;
+}
+
+.dv-bubble-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.dv-bubble-time {
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+
+/* ─── Chat Input ─────────────────────────────── */
+
+.dv-chat-input-area {
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dv-chat-input {
+  width: 100%;
+  min-height: 64px;
+  max-height: 120px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+  font-family: var(--font-interface);
+  resize: none;
+  box-sizing: border-box;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+
+.dv-chat-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.dv-chat-input-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* ─── Buttons ────────────────────────────────── */
+
+.dv-btn-primary {
+  padding: 6px 14px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.dv-btn-primary:hover {
+  opacity: 0.88;
+}
+
+.dv-btn-ghost {
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dv-btn-ghost:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.dv-btn-danger {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  color: var(--text-error);
+  border: 1px solid var(--text-error);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.15s;
+  opacity: 0.7;
+}
+
+.dv-btn-danger:hover {
+  opacity: 1;
+  background: rgba(255, 80, 80, 0.08);
+}
+
+/* ─── History Panel ──────────────────────────── */
+
+.dv-empty-state {
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.dv-empty-icon {
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+
+.dv-empty-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0 0 4px;
+  color: var(--text-normal);
+}
+
+.dv-empty-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.dv-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dv-history-item {
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.dv-history-user {
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.dv-history-assistant {
+  border-left: 3px solid var(--text-muted);
+}
+
+.dv-history-item-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.dv-history-role {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.dv-history-time {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.dv-history-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 3px;
+}
+
+.dv-history-preview {
+  font-size: 11.5px;
+  color: var(--text-normal);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ─── Status Bar ─────────────────────────────── */
+
+.dv-status {
+  padding: 4px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  min-height: 22px;
+  background: var(--background-secondary);
+}
+
+.dv-status-text {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  animation: dv-pulse 1.4s infinite;
+}
+
+/* ═══════════════════════════════════════════════
+   Deep Vault v2.3 — Additional Styles
+   ═══════════════════════════════════════════════ */
+
+/* ─── Synthesis Panel ────────────────────────── */
+
+.dv-synthesis-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.dv-synth-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.dv-selected-notes {
+  background: var(--background-secondary);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 10px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.dv-selected-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
+  width: 100%;
+}
+
+.dv-note-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.dv-note-tag-remove {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 10px;
+}
+
+.dv-note-tag-remove:hover {
+  opacity: 1;
+}
+
+.dv-btn-browse {
+  width: 100%;
+  padding: 9px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.dv-btn-browse:hover {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+/* ─── Export Buttons ─────────────────────────── */
+
+.dv-export-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.dv-btn-export {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--interactive-accent);
+  color: var(--interactive-accent);
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dv-btn-export:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.dv-btn-export-inline {
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  border-radius: 5px;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  align-self: flex-start;
+}
+
+.dv-btn-export-inline:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+}
+
+.dv-btn-save-small {
+  margin-top: 5px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dv-btn-save-small:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+}
+
+/* ─── Web Search Toggle ──────────────────────── */
+
+.dv-web-toggle {
+  transition: all 0.15s;
+}
+
+.dv-web-active {
+  background: var(--interactive-accent) !important;
+  color: var(--text-on-accent) !important;
+  border-color: var(--interactive-accent) !important;
+}
+
+/* ─── Modal Styles ───────────────────────────── */
+
+.dv-modal-selected {
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+.dv-modal-path {
+  color: var(--text-muted);
+  font-size: 10px;
+  display: block;
+}
+
+/* ─── History Enhancements ───────────────────── */
+
+.dv-history-list {
+  margin-top: 8px;
+}
