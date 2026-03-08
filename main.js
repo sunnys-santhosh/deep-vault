@@ -283,7 +283,8 @@ var DeepVaultView = class extends import_obsidian.ItemView {
       { icon: "\u{1F4A1}", label: "Concepts", action: "concepts", desc: "Extract core ideas & terms" },
       { icon: "\u{1F52D}", label: "Gaps", action: "gaps", desc: "Missing info & research gaps" },
       { icon: "\u{1F517}", label: "Connections", action: "connections", desc: "Links to other ideas" },
-      { icon: "\u{1F4DA}", label: "Literature", action: "literature", desc: "Related research areas" }
+      { icon: "\u{1F4DA}", label: "Literature", action: "literature", desc: "Related research areas" },
+      { icon: "\u{1F3F7}", label: "Auto-Tag", action: "autotag", desc: "Suggest & apply tags" }
     ];
     for (const a of actions) {
       const card = grid.createDiv("dv-action-card");
@@ -756,6 +757,10 @@ ${content}
       new import_obsidian.Notice("Please open a note first.");
       return;
     }
+    if (action === "autotag") {
+      await this.runAutoTag(note);
+      return;
+    }
     const prompts = {
       summarize: `Summarize this research note in 5 clear bullet points:
 
@@ -819,6 +824,176 @@ ${note.content}`
       this.responseEl.createEl("p", { text: `\u274C ${err.message}`, cls: "dv-error" });
     }
     this.setStatus("");
+  }
+  // ─── Auto-Tag Notes (v3.0.2) ──────────────────────────────────────────────
+  async runAutoTag(note) {
+    this.setStatus("\u23F3 Analysing note for tags...");
+    this.responseEl.empty();
+    this.responseEl.createEl("p", { text: "\u23F3 Asking Claude to suggest tags...", cls: "dv-thinking" });
+    if (!this.plugin.settings.apiKey) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: "\u26A0\uFE0F Add your API key in Settings \u2192 Deep Vault", cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+    const existingTags = this.getVaultTags();
+    const existingTagsStr = existingTags.length > 0 ? `
+
+Existing tags in this vault (prefer these where relevant): ${existingTags.slice(0, 40).join(", ")}` : "";
+    const prompt = `Analyse this note and suggest 5-8 relevant tags for it.${existingTagsStr}
+
+Rules:
+- Return ONLY a JSON array of tag strings, nothing else
+- Tags should be lowercase, use hyphens for spaces (e.g. "machine-learning")
+- No # symbol prefix
+- Mix specific and broad tags
+- Example output: ["research", "machine-learning", "neural-networks", "deep-learning", "ai", "paper-notes"]
+
+Note to analyse:
+# ${note.title}
+
+${note.content.slice(0, 2e3)}`;
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompt }], false);
+      const jsonMatch = result.match(/\[.*?\]/s);
+      if (!jsonMatch)
+        throw new Error("Could not parse tags from response.");
+      const suggestedTags = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(suggestedTags) || suggestedTags.length === 0) {
+        throw new Error("No tags returned.");
+      }
+      this.setStatus("");
+      this.responseEl.empty();
+      this.renderTagPicker(suggestedTags, note);
+    } catch (err) {
+      this.responseEl.empty();
+      this.responseEl.createEl("p", { text: `\u274C ${err.message}`, cls: "dv-error" });
+      this.setStatus("");
+    }
+  }
+  getVaultTags() {
+    const tags = /* @__PURE__ */ new Set();
+    this.app.vault.getMarkdownFiles().forEach((file) => {
+      var _a;
+      const cache = this.app.metadataCache.getFileCache(file);
+      if (cache == null ? void 0 : cache.tags)
+        cache.tags.forEach((t) => tags.add(t.tag.replace("#", "")));
+      if ((_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a.tags) {
+        const ft = cache.frontmatter.tags;
+        if (Array.isArray(ft))
+          ft.forEach((t) => tags.add(t));
+        else if (typeof ft === "string")
+          tags.add(ft);
+      }
+    });
+    return Array.from(tags).sort();
+  }
+  renderTagPicker(suggestedTags, note) {
+    this.responseEl.empty();
+    this.responseEl.createEl("p", { text: "\u{1F3F7} Suggested Tags", cls: "dv-autotag-title" });
+    this.responseEl.createEl("p", { text: "Click tags to select, then apply to your note.", cls: "dv-autotag-hint" });
+    const selected = new Set(suggestedTags);
+    const tagGrid = this.responseEl.createDiv("dv-tag-grid");
+    const renderTags = () => {
+      tagGrid.empty();
+      for (const tag of suggestedTags) {
+        const chip = tagGrid.createEl("button", {
+          text: `#${tag}`,
+          cls: selected.has(tag) ? "dv-tag-chip dv-tag-chip-selected" : "dv-tag-chip"
+        });
+        chip.onclick = () => {
+          if (selected.has(tag))
+            selected.delete(tag);
+          else
+            selected.add(tag);
+          renderTags();
+          updateButtons();
+        };
+      }
+    };
+    renderTags();
+    const btnRow = this.responseEl.createDiv("dv-autotag-btn-row");
+    const selectAllBtn = btnRow.createEl("button", { text: "Select All", cls: "dv-btn-ghost-sm" });
+    selectAllBtn.onclick = () => {
+      suggestedTags.forEach((t) => selected.add(t));
+      renderTags();
+      updateButtons();
+    };
+    const clearBtn = btnRow.createEl("button", { text: "Clear All", cls: "dv-btn-ghost-sm" });
+    clearBtn.onclick = () => {
+      selected.clear();
+      renderTags();
+      updateButtons();
+    };
+    const applyBtn = btnRow.createEl("button", { text: "\u2705 Apply to Note", cls: "dv-btn-primary" });
+    applyBtn.onclick = () => this.applyTagsToNote(Array.from(selected), note);
+    const updateButtons = () => {
+      applyBtn.setText(`\u2705 Apply ${selected.size} Tag${selected.size !== 1 ? "s" : ""} to Note`);
+      applyBtn.disabled = selected.size === 0;
+    };
+    updateButtons();
+  }
+  async applyTagsToNote(tags, note) {
+    if (tags.length === 0) {
+      new import_obsidian.Notice("No tags selected.");
+      return;
+    }
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    if (!view || !view.file) {
+      new import_obsidian.Notice("Could not find the active note.");
+      return;
+    }
+    const file = view.file;
+    let content = await this.app.vault.read(file);
+    const hasFrontmatter = content.startsWith("---");
+    if (hasFrontmatter) {
+      const endIdx = content.indexOf("---", 3);
+      if (endIdx !== -1) {
+        const frontmatter = content.slice(0, endIdx + 3);
+        const rest = content.slice(endIdx + 3);
+        if (frontmatter.includes("tags:")) {
+          const newFrontmatter = frontmatter.replace(
+            /tags:(.*)/,
+            (match) => {
+              const existing = match.replace("tags:", "").trim();
+              if (existing.startsWith("[")) {
+                const arr = existing.slice(1, -1).split(",").map((t) => t.trim()).filter(Boolean);
+                tags.forEach((t) => {
+                  if (!arr.includes(t))
+                    arr.push(t);
+                });
+                return `tags: [${arr.join(", ")}]`;
+              } else {
+                const newTagLines = tags.map((t) => `
+  - ${t}`).join("");
+                return match + newTagLines;
+              }
+            }
+          );
+          content = newFrontmatter + rest;
+        } else {
+          const tagLines = tags.map((t) => `  - ${t}`).join("\n");
+          content = frontmatter.replace("---", `tags:
+${tagLines}
+---`).slice(0, -3) + rest;
+        }
+      }
+    } else {
+      const tagLines = tags.map((t) => `  - ${t}`).join("\n");
+      content = `---
+tags:
+${tagLines}
+---
+
+` + content;
+    }
+    await this.app.vault.modify(file, content);
+    new import_obsidian.Notice(`\u2705 Applied ${tags.length} tag${tags.length !== 1 ? "s" : ""} to "${note.title}"`);
+    this.responseEl.empty();
+    this.responseEl.createEl("p", { text: "\u2705 Tags Applied!", cls: "dv-autotag-title" });
+    const appliedGrid = this.responseEl.createDiv("dv-tag-grid");
+    tags.forEach((t) => appliedGrid.createEl("span", { text: `#${t}`, cls: "dv-tag-chip dv-tag-chip-applied" }));
+    this.responseEl.createEl("p", { text: `Added to frontmatter of "${note.title}"`, cls: "dv-autotag-hint" });
   }
   async callClaudeChat(messages, useWeb) {
     if (!this.plugin.settings.apiKey) {
@@ -969,7 +1144,7 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
       }
     });
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v3.0.1 loaded \u2705");
+    console.log("Deep Vault v3.0.2 loaded \u2705");
   }
   async activateView() {
     const { workspace } = this.app;

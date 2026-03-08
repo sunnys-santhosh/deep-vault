@@ -1021,3 +1021,76 @@
   padding-top: 12px;
   border-top: 1px solid var(--background-modifier-border);
 }
+
+/* ═══════════════════════════════════════════════
+   Deep Vault v3.0.2 — Auto-Tag Styles
+   ═══════════════════════════════════════════════ */
+
+/* ─── Auto-Tag UI ────────────────────────────── */
+
+.dv-autotag-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-normal);
+  margin: 0 0 4px;
+}
+
+.dv-autotag-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.dv-tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.dv-tag-chip {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1.5px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: monospace;
+}
+
+.dv-tag-chip:hover {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.dv-tag-chip-selected {
+  background: var(--interactive-accent) !important;
+  color: var(--text-on-accent) !important;
+  border-color: var(--interactive-accent) !important;
+}
+
+.dv-tag-chip-applied {
+  background: var(--background-modifier-success, #2d6a2d) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  cursor: default;
+}
+
+.dv-autotag-btn-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dv-autotag-btn-row .dv-btn-primary {
+  margin-left: auto;
+}
+
+.dv-autotag-btn-row .dv-btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
