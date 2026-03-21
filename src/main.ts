@@ -1816,7 +1816,7 @@ export default class DeepVaultPlugin extends Plugin {
       }
     });
 
-    console.log("Deep Vault v3.1.1 loaded ✅");
+    console.log("Deep Vault v3.1.2 loaded ✅");
   }
 
   async activateView() {

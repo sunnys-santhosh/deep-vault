@@ -1,11 +1,11 @@
 {
   "id": "deep-vault",
   "name": "Deep Vault",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "minAppVersion": "0.15.0",
   "description": "AI-powered research assistant for Obsidian. Summarize notes, ask questions, synthesize ideas, and discover connections across your vault.",
   "author": "Deep Vault",
-  "authorUrl": "https://github.com/your-username/deep-vault",
-  "fundingUrl": "https://buymeacoffee.com/your-username",
+  "authorUrl": "https://github.com/sunnys-santhosh/deep-vault",
+  "fundingUrl": "https://buymeacoffee.com/sunnys-santhosh",
   "isDesktopOnly": false
 }

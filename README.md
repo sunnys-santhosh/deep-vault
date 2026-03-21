@@ -1,228 +1,280 @@
 # 🔍 Deep Vault
 
-> AI-powered research assistant for Obsidian, powered by Claude
+**AI-powered research assistant for Obsidian, powered by Claude**
 
-Deep Vault brings the intelligence of Anthropic's Claude directly into your Obsidian vault. Summarise notes, chat with your research, synthesise ideas across multiple notes, search your entire vault with natural language, auto-tag notes, run custom prompt templates, and generate daily research digests — all without leaving Obsidian.
+[![Version](https://img.shields.io/badge/version-3.1.2-blue)](https://github.com/sunnys-santhosh/deep-vault/releases)
+[![Obsidian](https://img.shields.io/badge/Obsidian-0.15%2B-purple)](https://obsidian.md)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+Deep Vault brings the intelligence of Anthropic's Claude directly into your Obsidian vault. Research smarter, write better, and discover connections you never knew existed — all without leaving your notes.
+
+---
+
+## 📸 Screenshots
+
+> **How to take screenshots for your GitHub listing:**
+>
+> 1. Open Obsidian with Deep Vault loaded and a research note open
+> 2. Take screenshots with `Win + Shift + S` (Windows) or `Cmd + Shift + 4` (Mac)
+> 3. Save them to `docs/screenshots/` in your repo
+> 4. Replace the image paths below with your actual files
+>
+> **Recommended shots:**
+> - Research tab showing 6 action cards
+> - Chat tab mid-conversation
+> - Auto-tag picker with suggested tags selected
+> - Vault-wide search results with source chips
+> - Daily digest output
+> - Setup wizard welcome screen
+> - Mobile view (Obsidian mobile app or browser DevTools responsive mode)
+
+**How to create a demo GIF:**
+1. Download [ScreenToGif](https://www.screentogif.com/) — free, Windows
+2. Record 20-30 seconds: open panel → summarise a note → chat → auto-tag
+3. Export at 800×600, 15fps
+4. Save as `docs/screenshots/demo.gif` and link it here
 
 ---
 
 ## ✨ Features
 
 ### 🔬 Research Tab
-- **6 Quick Actions** — Summarise, Questions, Concepts, Gaps, Connections, Literature Review
-- **🏷 Auto-Tag Notes** — Claude analyses your note and suggests relevant tags; pick the ones you want and apply them directly to your frontmatter with one click
-- **📰 Daily Research Digest** — Summarise all notes you've worked on recently (last 24hrs, 7 days, or 30 days) into a structured digest with key ideas, connections, open questions, and next steps
+Six AI-powered quick actions on your currently open note:
+
+| Action | What it does |
+|---|---|
+| 📄 Summarise | 5 bullet-point summary of key ideas |
+| ❓ Questions | 6 insightful follow-up research questions |
+| 💡 Concepts | Extract and explain core terms |
+| 🔭 Gaps | Identify missing evidence and research gaps |
+| 🔗 Connections | Find links to other research areas |
+| 📚 Literature | Suggest related academic topics |
+
+**🏷 Auto-Tag Notes** — Claude suggests 5–8 relevant tags, lets you pick which ones to apply, then writes them directly into your note's frontmatter. Uses your existing vault tags for consistency.
+
+**📰 Daily Research Digest** — One-click summary of everything you worked on recently. Choose last 24 hours, 7 days, or 30 days. Returns a structured digest: overview, key ideas, connections, open questions, and next steps.
 
 ### 💬 Chat Tab
-- Full multi-turn conversation with Claude — it remembers what you said earlier in the session
-- **📄 Use Note** — inject your current note as context with one click
-- **🌐 Web Search** — toggle on to let Claude search the internet for current information, fact-checking, and recent research
-- `Enter` to send, `Shift+Enter` for new line
+Full multi-turn conversation with Claude — it remembers the whole session.
+- **📄 Note** — inject your open note as context instantly
+- **🌐 Web** — toggle on to search the internet for current information
+- `Enter` to send · `Shift+Enter` for new line
+- Every response has a **💾 Save as Note** button
 
 ### 🔗 Synthesis Tab
-- Select 2 or more notes from your vault using the note browser
-- Choose a synthesis mode:
-  - **Summarise All** — unified summary across selected notes
-  - **Compare** — similarities and differences
-  - **Connect** — common themes and patterns
-  - **Literature Review** — academic-style overview
-- Export the synthesis as a new Obsidian note
+Select 2+ notes from your vault and synthesise them together:
+- **Summarise All** — unified summary across selected notes
+- **Compare** — similarities and differences
+- **Connect** — common themes and patterns
+- **Literature Review** — academic-style overview
 
 ### 📝 Templates Tab
-- Save and reuse your own custom Claude prompts
-- **6 built-in templates** to get you started:
-  - 📋 Executive Summary
-  - 🔬 Critical Analysis
-  - 🧒 Explain Simply
-  - ✅ Action Items
-  - ⚔️ Counter Arguments
-  - 🐦 Tweet Thread
-- **Full template editor** — name, icon, prompt text, toggle note context on/off
-- Quick insert variables: `{{note_title}}`, `{{date}}`
-- Run any template against your current note with one click
-- Results appear in the Research tab with export option
+Save and reuse your own Claude prompts with one click.
+
+**6 built-in starter templates:**
+- 📋 Executive Summary · 🔬 Critical Analysis · 🧒 Explain Simply
+- ✅ Action Items · ⚔️ Counter Arguments · 🐦 Tweet Thread
+
+Full template editor with name, icon, prompt, note context toggle, and `{{note_title}}` / `{{date}}` variable support.
 
 ### 🔍 Search Tab
-- Search across your **entire vault** using natural language
-- Filter by folder and set max notes to scan
-- Smart relevance scoring — notes ranked by keyword matches in titles, headings and tags
-- Claude synthesises a unified answer with citations
-- **Clickable source chips** — click any source note to open it instantly
+Natural language search across your **entire vault**:
+- Smart relevance scoring using note titles, headings and tags
+- Folder filter and configurable note count limit
+- Claude synthesises a unified answer with source citations
+- **Clickable source chips** — tap any note to open it instantly
 - Export results as a new note
 
-### 📋 History Tab
-- Full session log of every query and Claude response
-- Save any individual message as a new note
-- **Export full session history** as a single structured note
-- Clear history when you want a fresh start
+### 📋 More Tab
+- Session history log with individual save buttons
+- Full session export as a structured note
+- Keyboard shortcuts reference card
+- Re-run setup wizard button
 
 ---
 
 ## 🚀 Installation
 
-### From Obsidian Community Plugins *(coming soon)*
-1. Open Obsidian → Settings → Community Plugins
-2. Search for **"Deep Vault"**
-3. Install → Enable
+### From Obsidian Community Plugins *(Recommended)*
+1. Open Obsidian → **Settings → Community Plugins**
+2. Click **Browse** and search for **Deep Vault**
+3. Click **Install** → **Enable**
+4. The setup wizard appears automatically
 
 ### Manual Installation
-1. Download the latest release from [GitHub Releases](https://github.com/sunnys-santhosh/deep-vault/releases)
-2. Copy `main.js`, `manifest.json`, and `styles.css` to:
-   ```
-   <your-vault>/.obsidian/plugins/deep-vault/
-   ```
-3. Reload Obsidian
-4. Enable the plugin: Settings → Community Plugins → Deep Vault → Enable
+1. Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/sunnys-santhosh/deep-vault/releases/latest)
+2. Create folder: `<your-vault>/.obsidian/plugins/deep-vault/`
+3. Copy all 3 files into that folder
+4. Reload Obsidian → Settings → Community Plugins → Enable **Deep Vault**
 
 ---
 
 ## ⚙️ Setup
 
-1. Get your **Anthropic API key** from [console.anthropic.com](https://console.anthropic.com)
-2. Open Obsidian → Settings → **Deep Vault**
-3. Paste your API key
-4. Choose your preferred Claude model (Sonnet recommended)
-5. Click the 🔍 icon in the left ribbon to open Deep Vault
+1. Get your **Anthropic API key** at [console.anthropic.com](https://console.anthropic.com)
+   - Sign up → API Keys → Create Key → Copy the key (`sk-ant-...`)
+2. Open Obsidian — the **Setup Wizard** appears automatically on first install
+3. Paste your API key in Step 2 of the wizard
+4. Choose your model — Sonnet recommended
+5. Click the **🔍 icon** in the left ribbon to open Deep Vault
 
 ---
 
-## 💰 Cost
+## 💰 Pricing
 
-The plugin is **completely free**. You need your own Anthropic API key and pay only for what you use:
+Deep Vault is **completely free**. You pay Anthropic only for what you actually use:
 
-| Action | Approx. Cost |
+| Action | Approx. cost |
 |---|---|
 | Summarise a note | ~$0.001 |
 | Chat message | ~$0.001 |
+| Auto-tag a note | ~$0.002 |
 | Vault-wide search (20 notes) | ~$0.005 |
 | Daily digest (15 notes) | ~$0.005 |
-| Heavy daily use (1 month) | ~$1–3 |
+| Heavy daily use — per month | ~$1–3 |
 
-A **$5 credit** will last most users several months of regular use.
+A **$5 credit** will last most users several months. Claude Haiku option available for even lower costs.
 
 ---
 
-## ⌨️ Commands
+## ⌨️ Commands & Hotkeys
 
-Deep Vault registers these Obsidian commands (accessible via `Ctrl+P`):
+All commands accessible via `Ctrl+P` / `Cmd+P`. Assign custom hotkeys in **Settings → Hotkeys → search "Deep Vault"**.
 
 | Command | Description |
 |---|---|
 | `Open Deep Vault panel` | Open the sidebar panel |
-| `Generate daily research digest` | Instantly trigger a 24hr digest |
-| `Export current note analysis to new note` | Quick export shortcut |
+| `Deep Vault: Go to Research tab` | Jump to Research |
+| `Deep Vault: Go to Chat tab` | Jump to Chat |
+| `Deep Vault: Go to Synthesis tab` | Jump to Synthesis |
+| `Deep Vault: Go to Templates tab` | Jump to Templates |
+| `Deep Vault: Go to Search tab` | Jump to Search |
+| `Deep Vault: Summarise current note` | Quick summarise |
+| `Deep Vault: Generate research questions` | Quick questions |
+| `Deep Vault: Extract key concepts` | Quick concepts |
+| `Deep Vault: Find research gaps` | Quick gaps |
+| `Deep Vault: Auto-tag current note` | Auto-tag |
+| `Deep Vault: Generate daily research digest` | Daily digest |
+| `Deep Vault: Search vault` | Open search tab |
+| `Deep Vault: Open setup wizard` | Re-run wizard |
 
 ---
 
 ## ⚙️ Settings
 
-| Setting | Description |
-|---|---|
-| **API Key** | Your Anthropic API key — stored locally, never shared |
-| **Claude Model** | Sonnet 4 (recommended) or Haiku 4.5 (faster, cheaper) |
-| **Max Response Length** | 500–4000 tokens |
-| **Enable Web Search** | Allow Claude to search the web in Chat tab |
-| **Export Folder** | Vault folder where exported notes are saved (default: `Deep Vault Exports`) |
+| Setting | Default | Description |
+|---|---|---|
+| API Key | — | Your Anthropic API key — stored locally, never shared |
+| Claude Model | Sonnet 4 | Model used for all requests |
+| Max Response Length | 2000 tokens | Higher = longer, more detailed responses |
+| Enable Web Search | On | Allow web search in Chat tab |
+| Export Folder | `Deep Vault Exports` | Vault folder for exported notes |
 
 ---
 
-## 🗺 Roadmap
+## 📱 Mobile Support
 
-- [x] Research tab with 6 quick actions
-- [x] Chat with history and web search
-- [x] Multi-note synthesis
-- [x] Export responses as notes
-- [x] Custom prompt templates
-- [x] Auto-tag notes
-- [x] Vault-wide search
-- [x] Daily research digest
-- [ ] Setup wizard for new users
-- [ ] Keyboard shortcuts for all actions
-- [ ] Mobile support
-- [ ] Vault-wide topic graph
+Deep Vault fully supports **Obsidian iOS and Android**:
+- **Swipe left/right** to navigate between tabs
+- Touch-optimised tap targets throughout
+- Icon-only compact tab bar on narrow screens
+- Active state feedback instead of hover
+- iPhone notch and home indicator safe area support
 
 ---
 
 ## 🛠 Development
 
 ```bash
-# Clone the repo
 git clone https://github.com/sunnys-santhosh/deep-vault
 cd deep-vault
-
-# Install dependencies
 npm install
-
-# Build for development (watch mode)
-npm run dev
-
-# Build for production
-npm run build
+npm run dev      # watch mode with auto-rebuild
+npm run build    # production build
 ```
 
-### Branch Structure
+### Branch Strategy
 ```
-main          ← stable releases
-  └── dev     ← integration branch
+main              ← stable releases only
+  └── dev         ← integration branch
         └── feature/*   ← one branch per feature
 ```
 
-### Deploying to Obsidian
-Copy the 3 built files to your vault's plugin folder:
-```
-<vault>/.obsidian/plugins/deep-vault/main.js
-<vault>/.obsidian/plugins/deep-vault/manifest.json
-<vault>/.obsidian/plugins/deep-vault/styles.css
+### Deploy Script (Windows)
+```cmd
+deploy.bat   ← copies main.js, manifest.json, styles.css to Obsidian plugin folder
 ```
 
 ---
 
 ## 📋 Changelog
 
+### v3.1.2
+- 📸 Screenshots and demo GIF guide
+- 🔧 Manifest author URLs corrected
+- 📝 Comprehensive README overhaul
+
+### v3.1.1
+- 📱 Full mobile support — touch swipe, responsive layout, safe area insets
+- Icon-only tabs on narrow screens
+- Touch active states replacing hover effects
+
+### v3.1.0
+- 🧙 5-step setup wizard — auto-shown on first install
+- ⌨️ 14 keyboard commands, all assignable as hotkeys
+- 📋 Shortcuts reference card in More tab
+
 ### v3.0.4
-- 📰 Daily Research Digest — summarise recent notes with configurable time range
-- Available as Obsidian command for instant access
+- 📰 Daily research digest with 24hr / 7 day / 30 day range
+- Available as Obsidian command for instant access anywhere
 
 ### v3.0.3
-- 🔍 Vault-Wide Search — natural language search across entire vault
+- 🔍 Vault-wide search with natural language queries
 - Smart relevance scoring, source citations, clickable note chips
 
 ### v3.0.2
-- 🏷 Auto-Tag Notes — Claude suggests tags, applies to frontmatter
+- 🏷 Auto-tag notes — Claude suggests, you pick, applied to frontmatter
 - Vault-aware tag suggestions using existing tags
 
 ### v3.0.1
-- 📝 Custom Prompt Templates — save, edit and reuse prompts
-- 6 built-in starter templates
-- Template editor modal with variable support
+- 📝 Custom prompt templates with full editor modal
+- 6 built-in starter templates with variable support
 
 ### v2.3.0
 - 🔗 Multi-note synthesis with 4 modes
-- 💾 Export any response as a new Obsidian note
+- 💾 Export responses as new Obsidian notes
 - 🌐 Web search integration in Chat tab
 - 📋 Session history with full export
 
 ### v2.0.0
 - Complete UI redesign with tabbed interface
-- Full chat with conversation history
-- Proper markdown rendering
-- Light/dark theme support
+- Full chat with conversation history and markdown rendering
 
 ### v1.0.0
-- Initial release
-- Basic sidebar with 4 quick actions
-- Claude API integration
+- Initial release — sidebar panel, 4 quick actions, Claude API
+
+---
+
+## 🤝 Contributing
+
+Pull requests welcome! Please:
+1. Fork the repo and create a feature branch from `dev`
+2. Make your changes with clear commit messages
+3. Open a PR against the `dev` branch
+
+For major changes, open an issue first to discuss.
 
 ---
 
 ## 📄 License
 
-MIT License — free to use, modify, and distribute.
+[MIT](LICENSE) — free to use, modify and distribute.
 
 ---
 
 ## ❤️ Support
 
-If Deep Vault helps your research, consider [buying me a coffee](https://buymeacoffee.com)!
+If Deep Vault helps your research, consider [buying me a coffee](https://buymeacoffee.com/sunnyssanthosh)!
 
-Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/sunnys-santhosh/deep-vault/issues).
+**Found a bug?** [Open an issue](https://github.com/sunnys-santhosh/deep-vault/issues)
+**Have a feature idea?** [Start a discussion](https://github.com/sunnys-santhosh/deep-vault/discussions)
