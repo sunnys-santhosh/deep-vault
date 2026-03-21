@@ -242,6 +242,11 @@ class DeepVaultView extends ItemView {
     const root = this.containerEl.children[1] as HTMLElement;
     root.empty();
     root.addClass("dv-root");
+
+    // Detect mobile and add class for CSS targeting
+    const isMobile = (this.app as any).isMobile ?? window.innerWidth < 768;
+    if (isMobile) root.addClass("dv-mobile");
+
     this.buildHeader(root);
     this.buildTabs(root);
     this.buildPanelResearch(root);
@@ -252,6 +257,38 @@ class DeepVaultView extends ItemView {
     this.buildPanelHistory(root);
     this.statusEl = root.createDiv("dv-status");
     this.switchTab("research");
+
+    // Touch swipe support between tabs
+    this.addTouchSwipe(root);
+  }
+
+  private addTouchSwipe(root: HTMLElement) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const tabOrder: Array<"research" | "chat" | "synthesis" | "templates" | "search" | "history"> =
+      ["research", "chat", "synthesis", "templates", "search", "history"];
+
+    root.addEventListener("touchstart", (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    root.addEventListener("touchend", (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+
+      // Only horizontal swipes (dx > dy) with enough distance
+      if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+
+      const currentIdx = tabOrder.indexOf(this.activeTab);
+      if (dx < 0 && currentIdx < tabOrder.length - 1) {
+        // Swipe left → next tab
+        this.switchTab(tabOrder[currentIdx + 1]);
+      } else if (dx > 0 && currentIdx > 0) {
+        // Swipe right → previous tab
+        this.switchTab(tabOrder[currentIdx - 1]);
+      }
+    }, { passive: true });
   }
 
   // ─── Header ───────────────────────────────────────────────────────────────
@@ -272,29 +309,22 @@ class DeepVaultView extends ItemView {
   private buildTabs(root: HTMLElement) {
     const tabBar = root.createDiv("dv-tab-bar");
 
-    this.tabResearch = tabBar.createDiv("dv-tab");
-    this.tabResearch.innerHTML = "🔬 Research";
-    this.tabResearch.onclick = () => this.switchTab("research");
+    const tabs = [
+      { ref: "tabResearch", icon: "🔬", label: "Research", tab: "research" },
+      { ref: "tabChat", icon: "💬", label: "Chat", tab: "chat" },
+      { ref: "tabSynthesis", icon: "🔗", label: "Synthesis", tab: "synthesis" },
+      { ref: "tabTemplates", icon: "📝", label: "Templates", tab: "templates" },
+      { ref: "tabSearch", icon: "🔍", label: "Search", tab: "search" },
+      { ref: "tabHistory", icon: "📋", label: "More", tab: "history" },
+    ];
 
-    this.tabChat = tabBar.createDiv("dv-tab");
-    this.tabChat.innerHTML = "💬 Chat";
-    this.tabChat.onclick = () => this.switchTab("chat");
-
-    this.tabSynthesis = tabBar.createDiv("dv-tab");
-    this.tabSynthesis.innerHTML = "🔗 Synthesis";
-    this.tabSynthesis.onclick = () => this.switchTab("synthesis");
-
-    this.tabTemplates = tabBar.createDiv("dv-tab");
-    this.tabTemplates.innerHTML = "📝 Templates";
-    this.tabTemplates.onclick = () => this.switchTab("templates");
-
-    this.tabSearch = tabBar.createDiv("dv-tab");
-    this.tabSearch.innerHTML = "🔍 Search";
-    this.tabSearch.onclick = () => this.switchTab("search");
-
-    this.tabHistory = tabBar.createDiv("dv-tab");
-    this.tabHistory.innerHTML = "📋 More";
-    this.tabHistory.onclick = () => this.switchTab("history");
+    for (const t of tabs) {
+      const el = tabBar.createDiv("dv-tab");
+      el.createEl("span", { text: t.icon, cls: "dv-tab-icon" });
+      el.createEl("span", { text: t.label, cls: "dv-tab-label" });
+      el.onclick = () => this.switchTab(t.tab as any);
+      (this as any)[t.ref] = el;
+    }
   }
 
   switchTabPublic(tab: string) { this.switchTab(tab as any); }
@@ -417,7 +447,7 @@ class DeepVaultView extends ItemView {
     const clearBtn = inputFooter.createEl("button", { text: "🗑 Clear", cls: "dv-btn-ghost" });
     clearBtn.onclick = () => this.clearChat();
 
-    const useNoteBtn = inputFooter.createEl("button", { text: "📄 Use Note", cls: "dv-btn-ghost" });
+    const useNoteBtn = inputFooter.createEl("button", { text: "📄 Note", cls: "dv-btn-ghost" });
     useNoteBtn.onclick = () => {
       const note = this.getCurrentNote();
       if (note) { this.chatInputEl.value = `Based on my note "${note.title}": `; this.chatInputEl.focus(); }
@@ -1786,7 +1816,7 @@ export default class DeepVaultPlugin extends Plugin {
       }
     });
 
-    console.log("Deep Vault v3.1.0 loaded ✅");
+    console.log("Deep Vault v3.1.1 loaded ✅");
   }
 
   async activateView() {

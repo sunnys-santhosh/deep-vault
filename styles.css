@@ -1546,3 +1546,304 @@
   text-align: center;
   font-size: 12px;
 }
+
+/* ═══════════════════════════════════════════════
+   Deep Vault v3.1.1 — Mobile Support Styles
+   ═══════════════════════════════════════════════ */
+
+/* ─── Tab Icon/Label Split ───────────────────── */
+
+.dv-tab-icon {
+  font-size: 14px;
+}
+
+.dv-tab-label {
+  font-size: 11px;
+  margin-left: 3px;
+}
+
+/* ─── Mobile Base ────────────────────────────── */
+
+@media (max-width: 480px),
+.dv-mobile {
+
+  /* Hide tab text labels on narrow screens — icons only */
+  .dv-tab-label {
+    display: none;
+  }
+
+  .dv-tab-icon {
+    font-size: 18px;
+  }
+
+  .dv-tab {
+    padding: 10px 4px;
+  }
+
+  /* Bigger tap targets across the board */
+  .dv-action-card {
+    padding: 14px 10px;
+    min-height: 70px;
+  }
+
+  .dv-action-icon {
+    font-size: 20px;
+  }
+
+  .dv-action-label {
+    font-size: 13px;
+  }
+
+  .dv-action-desc {
+    display: none;
+  }
+
+  /* Larger buttons */
+  .dv-btn-primary {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .dv-btn-ghost {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .dv-btn-search {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  .dv-btn-digest {
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+
+  .dv-btn-browse {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  /* Chat — taller input, bigger send button */
+  .dv-chat-input {
+    min-height: 80px;
+    font-size: 14px;
+  }
+
+  .dv-chat-input-footer {
+    gap: 8px;
+  }
+
+  /* Larger chat bubbles */
+  .dv-bubble {
+    font-size: 13px;
+    padding: 10px 14px;
+  }
+
+  /* Search input */
+  .dv-search-input {
+    min-height: 80px;
+    font-size: 14px;
+  }
+
+  /* Response area — more height on mobile */
+  .dv-response {
+    max-height: 260px;
+    font-size: 13px;
+  }
+
+  /* Template cards — full width touch targets */
+  .dv-template-card {
+    padding: 12px 14px;
+  }
+
+  .dv-btn-run-template {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  /* Tag chips — bigger for touch */
+  .dv-tag-chip {
+    padding: 7px 14px;
+    font-size: 13px;
+  }
+
+  /* Source chips */
+  .dv-source-chip {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  /* Synthesis grid — single column on mobile */
+  .dv-synth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Action grid — single column on very narrow */
+  .dv-action-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* Header — compact on mobile */
+  .dv-header {
+    padding: 10px 12px 8px;
+  }
+
+  .dv-title {
+    font-size: 14px;
+  }
+
+  .dv-subtitle {
+    display: none;
+  }
+
+  .dv-badge {
+    display: none;
+  }
+
+  /* Wizard modal — full width */
+  .dv-wizard-modal {
+    padding: 4px;
+  }
+
+  .dv-wizard-btn {
+    font-size: 15px;
+    padding: 12px;
+  }
+
+  .dv-wizard-model-card {
+    padding: 14px;
+  }
+
+  /* Modal inputs — larger for touch */
+  .dv-modal-input {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .dv-modal-textarea {
+    font-size: 13px;
+    padding: 10px;
+    min-height: 120px;
+  }
+
+  /* Note tags in synthesis */
+  .dv-note-tag {
+    padding: 5px 12px;
+    font-size: 12px;
+  }
+
+  /* Export buttons */
+  .dv-btn-export {
+    padding: 9px 16px;
+    font-size: 12px;
+  }
+
+  /* Digest controls — stack vertically */
+  .dv-digest-controls {
+    flex-direction: column;
+  }
+
+  .dv-digest-select {
+    width: 100%;
+  }
+
+  .dv-btn-digest {
+    width: 100%;
+  }
+
+  /* Status bar — slightly taller */
+  .dv-status {
+    padding: 6px 12px;
+    min-height: 28px;
+  }
+}
+
+/* ─── Tablet / Medium screens ────────────────── */
+
+@media (max-width: 700px) {
+  .dv-tab-label {
+    font-size: 10px;
+  }
+
+  .dv-tab-icon {
+    font-size: 15px;
+  }
+
+  .dv-action-desc {
+    font-size: 9.5px;
+  }
+
+  .dv-response {
+    max-height: 280px;
+  }
+}
+
+/* ─── Touch feedback ─────────────────────────── */
+
+@media (hover: none) {
+
+  /* Remove hover effects on touch — use active states instead */
+  .dv-action-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .dv-action-card:active {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+    transform: scale(0.98);
+  }
+
+  .dv-tab:hover {
+    background: transparent;
+  }
+
+  .dv-tab:active {
+    background: var(--background-modifier-hover);
+  }
+
+  .dv-btn-primary:active {
+    opacity: 0.75;
+  }
+
+  .dv-btn-ghost:active {
+    background: var(--background-modifier-hover);
+  }
+
+  .dv-btn-search:active {
+    opacity: 0.75;
+  }
+
+  .dv-tag-chip:active {
+    transform: scale(0.95);
+  }
+
+  .dv-template-card:active {
+    border-color: var(--interactive-accent);
+  }
+
+  .dv-source-chip:active {
+    border-color: var(--interactive-accent);
+  }
+
+  /* Swipe hint on first open */
+  .dv-mobile .dv-panel::after {
+    content: "";
+    display: block;
+    height: 40px;
+  }
+}
+
+/* ─── Safe area (iPhone notch etc.) ─────────── */
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .dv-chat-input-area {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .dv-status {
+    padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  }
+}

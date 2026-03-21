@@ -211,9 +211,13 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     return "search";
   }
   async onOpen() {
+    var _a;
     const root = this.containerEl.children[1];
     root.empty();
     root.addClass("dv-root");
+    const isMobile = (_a = this.app.isMobile) != null ? _a : window.innerWidth < 768;
+    if (isMobile)
+      root.addClass("dv-mobile");
     this.buildHeader(root);
     this.buildTabs(root);
     this.buildPanelResearch(root);
@@ -224,6 +228,28 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     this.buildPanelHistory(root);
     this.statusEl = root.createDiv("dv-status");
     this.switchTab("research");
+    this.addTouchSwipe(root);
+  }
+  addTouchSwipe(root) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const tabOrder = ["research", "chat", "synthesis", "templates", "search", "history"];
+    root.addEventListener("touchstart", (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    root.addEventListener("touchend", (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx))
+        return;
+      const currentIdx = tabOrder.indexOf(this.activeTab);
+      if (dx < 0 && currentIdx < tabOrder.length - 1) {
+        this.switchTab(tabOrder[currentIdx + 1]);
+      } else if (dx > 0 && currentIdx > 0) {
+        this.switchTab(tabOrder[currentIdx - 1]);
+      }
+    }, { passive: true });
   }
   // ─── Header ───────────────────────────────────────────────────────────────
   buildHeader(root) {
@@ -239,24 +265,21 @@ var DeepVaultView = class extends import_obsidian.ItemView {
   // ─── Tabs ─────────────────────────────────────────────────────────────────
   buildTabs(root) {
     const tabBar = root.createDiv("dv-tab-bar");
-    this.tabResearch = tabBar.createDiv("dv-tab");
-    this.tabResearch.innerHTML = "\u{1F52C} Research";
-    this.tabResearch.onclick = () => this.switchTab("research");
-    this.tabChat = tabBar.createDiv("dv-tab");
-    this.tabChat.innerHTML = "\u{1F4AC} Chat";
-    this.tabChat.onclick = () => this.switchTab("chat");
-    this.tabSynthesis = tabBar.createDiv("dv-tab");
-    this.tabSynthesis.innerHTML = "\u{1F517} Synthesis";
-    this.tabSynthesis.onclick = () => this.switchTab("synthesis");
-    this.tabTemplates = tabBar.createDiv("dv-tab");
-    this.tabTemplates.innerHTML = "\u{1F4DD} Templates";
-    this.tabTemplates.onclick = () => this.switchTab("templates");
-    this.tabSearch = tabBar.createDiv("dv-tab");
-    this.tabSearch.innerHTML = "\u{1F50D} Search";
-    this.tabSearch.onclick = () => this.switchTab("search");
-    this.tabHistory = tabBar.createDiv("dv-tab");
-    this.tabHistory.innerHTML = "\u{1F4CB} More";
-    this.tabHistory.onclick = () => this.switchTab("history");
+    const tabs = [
+      { ref: "tabResearch", icon: "\u{1F52C}", label: "Research", tab: "research" },
+      { ref: "tabChat", icon: "\u{1F4AC}", label: "Chat", tab: "chat" },
+      { ref: "tabSynthesis", icon: "\u{1F517}", label: "Synthesis", tab: "synthesis" },
+      { ref: "tabTemplates", icon: "\u{1F4DD}", label: "Templates", tab: "templates" },
+      { ref: "tabSearch", icon: "\u{1F50D}", label: "Search", tab: "search" },
+      { ref: "tabHistory", icon: "\u{1F4CB}", label: "More", tab: "history" }
+    ];
+    for (const t of tabs) {
+      const el = tabBar.createDiv("dv-tab");
+      el.createEl("span", { text: t.icon, cls: "dv-tab-icon" });
+      el.createEl("span", { text: t.label, cls: "dv-tab-label" });
+      el.onclick = () => this.switchTab(t.tab);
+      this[t.ref] = el;
+    }
   }
   switchTabPublic(tab) {
     this.switchTab(tab);
@@ -359,7 +382,7 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     const inputFooter = inputArea.createDiv("dv-chat-input-footer");
     const clearBtn = inputFooter.createEl("button", { text: "\u{1F5D1} Clear", cls: "dv-btn-ghost" });
     clearBtn.onclick = () => this.clearChat();
-    const useNoteBtn = inputFooter.createEl("button", { text: "\u{1F4C4} Use Note", cls: "dv-btn-ghost" });
+    const useNoteBtn = inputFooter.createEl("button", { text: "\u{1F4C4} Note", cls: "dv-btn-ghost" });
     useNoteBtn.onclick = () => {
       const note = this.getCurrentNote();
       if (note) {
@@ -1568,7 +1591,7 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
         setTimeout(() => new SetupWizardModal(this.app, this).open(), 800);
       }
     });
-    console.log("Deep Vault v3.1.0 loaded \u2705");
+    console.log("Deep Vault v3.1.1 loaded \u2705");
   }
   async activateView() {
     const { workspace } = this.app;
