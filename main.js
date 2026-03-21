@@ -257,6 +257,9 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     this.tabHistory.innerHTML = "\u{1F4CB} History";
     this.tabHistory.onclick = () => this.switchTab("history");
   }
+  switchTabPublic(tab) {
+    this.switchTab(tab);
+  }
   switchTab(tab) {
     var _a;
     this.activeTab = tab;
@@ -305,6 +308,31 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     const exportBtn = exportRow.createEl("button", { text: "\u{1F4BE} Save as Note", cls: "dv-btn-export" });
     exportBtn.onclick = () => this.exportToNote(this.lastResponse, "Research Result");
     this._exportRow = exportRow;
+    this.panelResearch.createEl("p", { text: "DAILY DIGEST", cls: "dv-section-label dv-section-label-top" });
+    const digestDesc = this.panelResearch.createDiv("dv-digest-desc");
+    digestDesc.createEl("span", { text: "Summarise notes you have worked on recently.", cls: "dv-note-label" });
+    const digestControls = this.panelResearch.createDiv("dv-digest-controls");
+    const rangeSelect = digestControls.createEl("select", { cls: "dv-digest-select" });
+    [
+      { value: "1", label: "Last 24 hours" },
+      { value: "7", label: "Last 7 days" },
+      { value: "30", label: "Last 30 days" }
+    ].forEach((opt) => {
+      const o = rangeSelect.createEl("option", { text: opt.label });
+      o.value = opt.value;
+    });
+    const digestBtn = digestControls.createEl("button", { text: "\u{1F4F0} Generate Digest", cls: "dv-btn-digest" });
+    digestBtn.onclick = () => {
+      const days = parseInt(rangeSelect.value);
+      this.runDailyDigest(days);
+    };
+    const digestResponseWrap = this.panelResearch.createDiv("dv-response-wrap");
+    const digestResponseEl = digestResponseWrap.createDiv("dv-response");
+    digestResponseEl.createEl("p", { text: "Click Generate Digest to summarise your recent notes.", cls: "dv-placeholder" });
+    this._digestResponseEl = digestResponseEl;
+    const digestExportRow = this.panelResearch.createDiv("dv-export-row dv-hidden");
+    digestExportRow.createEl("button", { text: "\u{1F4BE} Save Digest as Note", cls: "dv-btn-export" }).onclick = () => this.exportDigestAsNote();
+    this._digestExportRow = digestExportRow;
   }
   get responseEl() {
     return this._responseEl;
@@ -1174,6 +1202,116 @@ ${tagLines}
     tags.forEach((t) => appliedGrid.createEl("span", { text: `#${t}`, cls: "dv-tag-chip dv-tag-chip-applied" }));
     this.responseEl.createEl("p", { text: `Added to frontmatter of "${note.title}"`, cls: "dv-autotag-hint" });
   }
+  // ─── Daily Research Digest (v3.0.4) ──────────────────────────────────────
+  async runDailyDigest(days) {
+    const digestResponseEl = this._digestResponseEl;
+    const digestExportRow = this._digestExportRow;
+    if (!this.plugin.settings.apiKey) {
+      digestResponseEl.empty();
+      digestResponseEl.createEl("p", { text: "\u26A0\uFE0F Add your API key in Settings \u2192 Deep Vault", cls: "dv-error" });
+      return;
+    }
+    digestResponseEl.empty();
+    digestResponseEl.createEl("p", { text: `\u23F3 Scanning notes from the last ${days} day${days > 1 ? "s" : ""}...`, cls: "dv-thinking" });
+    digestExportRow.addClass("dv-hidden");
+    this.setStatus("\u23F3 Generating digest...");
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1e3;
+    const recentFiles = this.app.vault.getMarkdownFiles().filter((f) => f.stat.mtime > cutoff).sort((a, b) => b.stat.mtime - a.stat.mtime);
+    if (recentFiles.length === 0) {
+      digestResponseEl.empty();
+      digestResponseEl.createEl("p", {
+        text: `\u{1F4ED} No notes modified in the last ${days} day${days > 1 ? "s" : ""}.`,
+        cls: "dv-placeholder"
+      });
+      this.setStatus("");
+      return;
+    }
+    const filesToDigest = recentFiles.slice(0, 15);
+    digestResponseEl.empty();
+    digestResponseEl.createEl("p", {
+      text: `\u23F3 Reading ${filesToDigest.length} recently modified notes...`,
+      cls: "dv-thinking"
+    });
+    const noteChunks = [];
+    for (const file of filesToDigest) {
+      try {
+        const content = await this.app.vault.read(file);
+        const modDate = new Date(file.stat.mtime).toLocaleDateString();
+        noteChunks.push(`## ${file.basename} (modified ${modDate})
+
+${content.slice(0, 600).trim()}`);
+      } catch (e) {
+      }
+    }
+    digestResponseEl.empty();
+    digestResponseEl.createEl("p", { text: "\u23F3 Asking Claude to generate digest...", cls: "dv-thinking" });
+    const rangeLabel = days === 1 ? "the last 24 hours" : `the last ${days} days`;
+    const prompt = `You are generating a daily research digest for an Obsidian user.
+
+They have modified ${noteChunks.length} notes in ${rangeLabel}. Analyse these notes and create a structured digest with these sections:
+
+## \u{1F4CA} Overview
+Brief summary of what they worked on (2-3 sentences).
+
+## \u{1F4A1} Key Ideas
+The most important concepts or insights across all notes (bullet points).
+
+## \u{1F517} Connections
+Any interesting links or themes across different notes.
+
+## \u2753 Open Questions
+Unresolved questions or areas that need more research.
+
+## \u2705 Suggested Next Steps
+2-3 concrete things to do next based on this work.
+
+Here are the notes:
+
+${noteChunks.join("\n\n---\n\n")}`;
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompt }], false);
+      digestResponseEl.empty();
+      renderMarkdown(digestResponseEl, result);
+      this._lastDigestResult = result;
+      this._lastDigestDays = days;
+      this._lastDigestCount = filesToDigest.length;
+      digestExportRow.removeClass("dv-hidden");
+      this.chatHistory.push({
+        role: "user",
+        content: `[Daily Digest] Last ${days} day${days > 1 ? "s" : ""} \u2014 ${filesToDigest.length} notes`,
+        timestamp: new Date()
+      });
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+    } catch (err) {
+      digestResponseEl.empty();
+      digestResponseEl.createEl("p", { text: `\u274C ${err.message}`, cls: "dv-error" });
+    }
+    this.setStatus("");
+  }
+  async exportDigestAsNote() {
+    const result = this._lastDigestResult;
+    const days = this._lastDigestDays;
+    const count = this._lastDigestCount;
+    if (!result) {
+      new import_obsidian.Notice("No digest to export.");
+      return;
+    }
+    const dateStr = formatDate(new Date());
+    const label = days === 1 ? "Daily" : days === 7 ? "Weekly" : "Monthly";
+    const content = `---
+created: ${new Date().toISOString()}
+source: Deep Vault
+type: Research Digest
+period: Last ${days} day${days > 1 ? "s" : ""}
+notes_reviewed: ${count}
+---
+
+# ${label} Research Digest \u2014 ${dateStr}
+
+${result}
+`;
+    await this.exportToNote(content, `${label} Digest`);
+  }
   async callClaudeChat(messages, useWeb) {
     if (!this.plugin.settings.apiKey) {
       this.addChatBubble("assistant", "\u26A0\uFE0F Please add your Anthropic API key in **Settings \u2192 Deep Vault**.");
@@ -1315,6 +1453,19 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
     this.addRibbonIcon("search", "Deep Vault", () => this.activateView());
     this.addCommand({ id: "open-deep-vault", name: "Open Deep Vault panel", callback: () => this.activateView() });
     this.addCommand({
+      id: "deep-vault-daily-digest",
+      name: "Generate daily research digest",
+      callback: async () => {
+        var _a;
+        await this.activateView();
+        const view = (_a = this.app.workspace.getLeavesOfType(DEEP_VAULT_VIEW)[0]) == null ? void 0 : _a.view;
+        if (view) {
+          view.switchTabPublic("research");
+          view.runDailyDigest(1);
+        }
+      }
+    });
+    this.addCommand({
       id: "deep-vault-export-note",
       name: "Export current note analysis to new note",
       editorCallback: async () => {
@@ -1323,7 +1474,7 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
       }
     });
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v3.0.3 loaded \u2705");
+    console.log("Deep Vault v3.0.4 loaded \u2705");
   }
   async activateView() {
     const { workspace } = this.app;

@@ -295,6 +295,8 @@ class DeepVaultView extends ItemView {
     this.tabHistory.onclick = () => this.switchTab("history");
   }
 
+  switchTabPublic(tab: string) { this.switchTab(tab as any); }
+
   private switchTab(tab: "research" | "chat" | "synthesis" | "templates" | "search" | "history") {
     this.activeTab = tab;
     const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabTemplates, this.tabSearch, this.tabHistory];
@@ -350,6 +352,43 @@ class DeepVaultView extends ItemView {
     const exportBtn = exportRow.createEl("button", { text: "💾 Save as Note", cls: "dv-btn-export" });
     exportBtn.onclick = () => this.exportToNote(this.lastResponse, "Research Result");
     (this as any)._exportRow = exportRow;
+
+    // ── Daily Digest section ──────────────────────────────────────────────
+    this.panelResearch.createEl("p", { text: "DAILY DIGEST", cls: "dv-section-label dv-section-label-top" });
+
+    const digestDesc = this.panelResearch.createDiv("dv-digest-desc");
+    digestDesc.createEl("span", { text: "Summarise notes you have worked on recently.", cls: "dv-note-label" });
+
+    const digestControls = this.panelResearch.createDiv("dv-digest-controls");
+
+    // Time range selector
+    const rangeSelect = digestControls.createEl("select", { cls: "dv-digest-select" });
+    [
+      { value: "1", label: "Last 24 hours" },
+      { value: "7", label: "Last 7 days" },
+      { value: "30", label: "Last 30 days" },
+    ].forEach(opt => {
+      const o = rangeSelect.createEl("option", { text: opt.label });
+      o.value = opt.value;
+    });
+
+    const digestBtn = digestControls.createEl("button", { text: "📰 Generate Digest", cls: "dv-btn-digest" });
+    digestBtn.onclick = () => {
+      const days = parseInt(rangeSelect.value);
+      this.runDailyDigest(days);
+    };
+
+    // Digest response area
+    const digestResponseWrap = this.panelResearch.createDiv("dv-response-wrap");
+    const digestResponseEl = digestResponseWrap.createDiv("dv-response");
+    digestResponseEl.createEl("p", { text: "Click Generate Digest to summarise your recent notes.", cls: "dv-placeholder" });
+    (this as any)._digestResponseEl = digestResponseEl;
+
+    // Digest export row
+    const digestExportRow = this.panelResearch.createDiv("dv-export-row dv-hidden");
+    digestExportRow.createEl("button", { text: "💾 Save Digest as Note", cls: "dv-btn-export" })
+      .onclick = () => this.exportDigestAsNote();
+    (this as any)._digestExportRow = digestExportRow;
   }
 
   private get responseEl(): HTMLElement { return this._responseEl; }
@@ -1322,6 +1361,135 @@ ${note.content.slice(0, 2000)}`;
     this.responseEl.createEl("p", { text: `Added to frontmatter of "${note.title}"`, cls: "dv-autotag-hint" });
   }
 
+
+  // ─── Daily Research Digest (v3.0.4) ──────────────────────────────────────
+
+  private async runDailyDigest(days: number) {
+    const digestResponseEl = (this as any)._digestResponseEl as HTMLElement;
+    const digestExportRow = (this as any)._digestExportRow as HTMLElement;
+
+    if (!this.plugin.settings.apiKey) {
+      digestResponseEl.empty();
+      digestResponseEl.createEl("p", { text: "⚠️ Add your API key in Settings → Deep Vault", cls: "dv-error" });
+      return;
+    }
+
+    digestResponseEl.empty();
+    digestResponseEl.createEl("p", { text: `⏳ Scanning notes from the last ${days} day${days > 1 ? "s" : ""}...`, cls: "dv-thinking" });
+    digestExportRow.addClass("dv-hidden");
+    this.setStatus("⏳ Generating digest...");
+
+    // Find recently modified files
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const recentFiles = this.app.vault.getMarkdownFiles()
+      .filter(f => f.stat.mtime > cutoff)
+      .sort((a, b) => b.stat.mtime - a.stat.mtime);
+
+    if (recentFiles.length === 0) {
+      digestResponseEl.empty();
+      digestResponseEl.createEl("p", {
+        text: `📭 No notes modified in the last ${days} day${days > 1 ? "s" : ""}.`,
+        cls: "dv-placeholder"
+      });
+      this.setStatus("");
+      return;
+    }
+
+    // Take top 15 most recently modified
+    const filesToDigest = recentFiles.slice(0, 15);
+
+    digestResponseEl.empty();
+    digestResponseEl.createEl("p", {
+      text: `⏳ Reading ${filesToDigest.length} recently modified notes...`,
+      cls: "dv-thinking"
+    });
+
+    // Read contents
+    const noteChunks: string[] = [];
+    for (const file of filesToDigest) {
+      try {
+        const content = await this.app.vault.read(file);
+        const modDate = new Date(file.stat.mtime).toLocaleDateString();
+        noteChunks.push(`## ${file.basename} (modified ${modDate})\n\n${content.slice(0, 600).trim()}`);
+      } catch { /* skip */ }
+    }
+
+    digestResponseEl.empty();
+    digestResponseEl.createEl("p", { text: "⏳ Asking Claude to generate digest...", cls: "dv-thinking" });
+
+    const rangeLabel = days === 1 ? "the last 24 hours" : `the last ${days} days`;
+    const prompt = `You are generating a daily research digest for an Obsidian user.
+
+They have modified ${noteChunks.length} notes in ${rangeLabel}. Analyse these notes and create a structured digest with these sections:
+
+## 📊 Overview
+Brief summary of what they worked on (2-3 sentences).
+
+## 💡 Key Ideas
+The most important concepts or insights across all notes (bullet points).
+
+## 🔗 Connections
+Any interesting links or themes across different notes.
+
+## ❓ Open Questions
+Unresolved questions or areas that need more research.
+
+## ✅ Suggested Next Steps
+2-3 concrete things to do next based on this work.
+
+Here are the notes:
+
+${noteChunks.join("\n\n---\n\n")}`;
+
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompt }], false);
+
+      digestResponseEl.empty();
+      renderMarkdown(digestResponseEl, result);
+      (this as any)._lastDigestResult = result;
+      (this as any)._lastDigestDays = days;
+      (this as any)._lastDigestCount = filesToDigest.length;
+      digestExportRow.removeClass("dv-hidden");
+
+      // Add to history
+      this.chatHistory.push({
+        role: "user",
+        content: `[Daily Digest] Last ${days} day${days > 1 ? "s" : ""} — ${filesToDigest.length} notes`,
+        timestamp: new Date()
+      });
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+
+    } catch (err) {
+      digestResponseEl.empty();
+      digestResponseEl.createEl("p", { text: `❌ ${err.message}`, cls: "dv-error" });
+    }
+
+    this.setStatus("");
+  }
+
+  private async exportDigestAsNote() {
+    const result = (this as any)._lastDigestResult as string;
+    const days = (this as any)._lastDigestDays as number;
+    const count = (this as any)._lastDigestCount as number;
+    if (!result) { new Notice("No digest to export."); return; }
+
+    const dateStr = formatDate(new Date());
+    const label = days === 1 ? "Daily" : days === 7 ? "Weekly" : "Monthly";
+    const content = `---
+created: ${new Date().toISOString()}
+source: Deep Vault
+type: Research Digest
+period: Last ${days} day${days > 1 ? "s" : ""}
+notes_reviewed: ${count}
+---
+
+# ${label} Research Digest — ${dateStr}
+
+${result}
+`;
+    await this.exportToNote(content, `${label} Digest`);
+  }
+
   private async callClaudeChat(messages: { role: string; content: string }[], useWeb: boolean) {
     if (!this.plugin.settings.apiKey) {
       this.addChatBubble("assistant", "⚠️ Please add your Anthropic API key in **Settings → Deep Vault**.");
@@ -1494,13 +1662,22 @@ export default class DeepVaultPlugin extends Plugin {
 
     this.addCommand({ id: "open-deep-vault", name: "Open Deep Vault panel", callback: () => this.activateView() });
     this.addCommand({
+      id: "deep-vault-daily-digest",
+      name: "Generate daily research digest",
+      callback: async () => {
+        await this.activateView();
+        const view = this.app.workspace.getLeavesOfType(DEEP_VAULT_VIEW)[0]?.view as DeepVaultView;
+        if (view) { view.switchTabPublic("research"); (view as any).runDailyDigest(1); }
+      }
+    });
+    this.addCommand({
       id: "deep-vault-export-note",
       name: "Export current note analysis to new note",
       editorCallback: async () => { await this.activateView(); new Notice("Run a Quick Action first, then click 💾 Save as Note."); },
     });
 
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v3.0.3 loaded ✅");
+    console.log("Deep Vault v3.0.4 loaded ✅");
   }
 
   async activateView() {
