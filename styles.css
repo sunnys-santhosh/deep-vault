@@ -1286,3 +1286,263 @@
 .dv-btn-digest:hover {
   opacity: 0.88;
 }
+
+/* ═══════════════════════════════════════════════
+   Deep Vault v3.1.0 — Setup Wizard Styles
+   ═══════════════════════════════════════════════ */
+
+/* ─── Wizard Modal ───────────────────────────── */
+
+.dv-wizard-modal {
+  padding: 8px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.dv-wizard-progress {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.dv-wizard-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--background-modifier-border);
+  transition: background 0.2s;
+}
+
+.dv-wizard-dot-active {
+  background: var(--interactive-accent);
+}
+
+.dv-wizard-icon {
+  font-size: 36px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.dv-wizard-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 16px;
+  color: var(--text-normal);
+}
+
+.dv-wizard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dv-wizard-text {
+  font-size: 13px;
+  color: var(--text-normal);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.dv-wizard-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dv-wizard-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dv-wizard-list li {
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+.dv-wizard-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dv-wizard-steps li {
+  font-size: 12.5px;
+  color: var(--text-normal);
+}
+
+.dv-wizard-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.dv-wizard-skip {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ─── Model Picker ───────────────────────────── */
+
+.dv-wizard-model-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dv-wizard-model-card {
+  padding: 12px;
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--background-secondary);
+}
+
+.dv-wizard-model-card:hover {
+  border-color: var(--interactive-accent);
+}
+
+.dv-wizard-model-selected {
+  border-color: var(--interactive-accent) !important;
+  background: var(--background-modifier-hover) !important;
+}
+
+.dv-wizard-model-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.dv-wizard-model-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.dv-wizard-model-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.dv-wizard-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.dv-wizard-badge-recommended {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.dv-wizard-badge-fast {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+/* ─── Shortcuts Table ────────────────────────── */
+
+.dv-wizard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.dv-wizard-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dv-wizard-table td {
+  padding: 4px 6px;
+}
+
+.dv-wizard-cmd {
+  color: var(--text-normal);
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.dv-wizard-hint-cell {
+  color: var(--text-muted);
+}
+
+/* ─── Final Step Tips ────────────────────────── */
+
+.dv-wizard-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dv-wizard-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.dv-wizard-tip-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.dv-wizard-tip-text {
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+/* ─── Hotkeys Panel ──────────────────────────── */
+
+.dv-hotkey-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.dv-hotkey-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+}
+
+.dv-hotkey-table tr {
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dv-hotkey-cmd {
+  font-size: 11.5px;
+  padding: 5px 4px;
+  color: var(--text-normal);
+  font-family: monospace;
+}
+
+.dv-hotkey-wizard-btn {
+  width: 100%;
+  margin-top: 8px;
+  text-align: center;
+  font-size: 12px;
+}

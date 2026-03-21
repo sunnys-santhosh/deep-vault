@@ -87,7 +87,8 @@ var DEFAULT_SETTINGS = {
   maxTokens: 2e3,
   enableWebSearch: true,
   exportFolder: "Deep Vault Exports",
-  templates: DEFAULT_TEMPLATES
+  templates: DEFAULT_TEMPLATES,
+  hasSeenWizard: false
 };
 function formatTime(date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -254,7 +255,7 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     this.tabSearch.innerHTML = "\u{1F50D} Search";
     this.tabSearch.onclick = () => this.switchTab("search");
     this.tabHistory = tabBar.createDiv("dv-tab");
-    this.tabHistory.innerHTML = "\u{1F4CB} History";
+    this.tabHistory.innerHTML = "\u{1F4CB} More";
     this.tabHistory.onclick = () => this.switchTab("history");
   }
   switchTabPublic(tab) {
@@ -274,8 +275,10 @@ var DeepVaultView = class extends import_obsidian.ItemView {
       (_a = this.chatInputEl) == null ? void 0 : _a.focus();
     if (tab === "templates")
       this.renderTemplates();
-    if (tab === "history")
+    if (tab === "history") {
+      this.renderHotkeys();
       this.renderHistory();
+    }
   }
   // ─── Research Panel ───────────────────────────────────────────────────────
   buildPanelResearch(root) {
@@ -847,6 +850,40 @@ ${noteChunks.join("\n\n---\n\n")}`;
   // ─── History Panel ────────────────────────────────────────────────────────
   buildPanelHistory(root) {
     this.panelHistory = root.createDiv("dv-panel");
+  }
+  renderHotkeys() {
+    const panel = this.panelHistory;
+    panel.empty();
+    panel.createEl("p", { text: "KEYBOARD SHORTCUTS", cls: "dv-section-label" });
+    panel.createEl("p", { text: "Assign hotkeys in Settings \u2192 Hotkeys \u2192 search Deep Vault", cls: "dv-hotkey-hint" });
+    const shortcuts = [
+      { cmd: "Open Deep Vault panel", cat: "Navigation" },
+      { cmd: "Deep Vault: Go to Research tab", cat: "Navigation" },
+      { cmd: "Deep Vault: Go to Chat tab", cat: "Navigation" },
+      { cmd: "Deep Vault: Go to Synthesis tab", cat: "Navigation" },
+      { cmd: "Deep Vault: Go to Templates tab", cat: "Navigation" },
+      { cmd: "Deep Vault: Go to Search tab", cat: "Navigation" },
+      { cmd: "Deep Vault: Go to History tab", cat: "Navigation" },
+      { cmd: "Deep Vault: Summarise current note", cat: "Actions" },
+      { cmd: "Deep Vault: Generate research questions", cat: "Actions" },
+      { cmd: "Deep Vault: Extract key concepts", cat: "Actions" },
+      { cmd: "Deep Vault: Find research gaps", cat: "Actions" },
+      { cmd: "Deep Vault: Auto-tag current note", cat: "Actions" },
+      { cmd: "Deep Vault: Generate daily research digest", cat: "Digest" },
+      { cmd: "Deep Vault: Search vault", cat: "Search" },
+      { cmd: "Deep Vault: Open setup wizard", cat: "Setup" }
+    ];
+    const cats = [...new Set(shortcuts.map((s) => s.cat))];
+    for (const cat of cats) {
+      panel.createEl("p", { text: cat.toUpperCase(), cls: "dv-section-label dv-section-label-top" });
+      const table = panel.createEl("table", { cls: "dv-hotkey-table" });
+      shortcuts.filter((s) => s.cat === cat).forEach((s) => {
+        const row = table.createEl("tr");
+        row.createEl("td", { text: s.cmd, cls: "dv-hotkey-cmd" });
+      });
+    }
+    const wizardBtn = panel.createEl("button", { text: "\u{1F9D9} Re-run Setup Wizard", cls: "dv-btn-ghost dv-hotkey-wizard-btn" });
+    wizardBtn.onclick = () => new SetupWizardModal(this.app, this.plugin).open();
   }
   renderHistory() {
     this.panelHistory.empty();
@@ -1452,9 +1489,53 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
     this.registerView(DEEP_VAULT_VIEW, (leaf) => new DeepVaultView(leaf, this));
     this.addRibbonIcon("search", "Deep Vault", () => this.activateView());
     this.addCommand({ id: "open-deep-vault", name: "Open Deep Vault panel", callback: () => this.activateView() });
+    const tabCommands = [
+      { id: "deep-vault-tab-research", name: "Deep Vault: Go to Research tab", tab: "research" },
+      { id: "deep-vault-tab-chat", name: "Deep Vault: Go to Chat tab", tab: "chat" },
+      { id: "deep-vault-tab-synthesis", name: "Deep Vault: Go to Synthesis tab", tab: "synthesis" },
+      { id: "deep-vault-tab-templates", name: "Deep Vault: Go to Templates tab", tab: "templates" },
+      { id: "deep-vault-tab-search", name: "Deep Vault: Go to Search tab", tab: "search" },
+      { id: "deep-vault-tab-history", name: "Deep Vault: Go to History tab", tab: "history" }
+    ];
+    for (const cmd of tabCommands) {
+      this.addCommand({
+        id: cmd.id,
+        name: cmd.name,
+        callback: async () => {
+          var _a;
+          await this.activateView();
+          const view = (_a = this.app.workspace.getLeavesOfType(DEEP_VAULT_VIEW)[0]) == null ? void 0 : _a.view;
+          if (view)
+            view.switchTabPublic(cmd.tab);
+        }
+      });
+    }
+    const actionCommands = [
+      { id: "deep-vault-summarize", name: "Deep Vault: Summarise current note", action: "summarize" },
+      { id: "deep-vault-questions", name: "Deep Vault: Generate research questions", action: "questions" },
+      { id: "deep-vault-concepts", name: "Deep Vault: Extract key concepts", action: "concepts" },
+      { id: "deep-vault-gaps", name: "Deep Vault: Find research gaps", action: "gaps" },
+      { id: "deep-vault-connections", name: "Deep Vault: Find connections", action: "connections" },
+      { id: "deep-vault-autotag", name: "Deep Vault: Auto-tag current note", action: "autotag" }
+    ];
+    for (const cmd of actionCommands) {
+      this.addCommand({
+        id: cmd.id,
+        name: cmd.name,
+        editorCallback: async () => {
+          var _a;
+          await this.activateView();
+          const view = (_a = this.app.workspace.getLeavesOfType(DEEP_VAULT_VIEW)[0]) == null ? void 0 : _a.view;
+          if (view) {
+            view.switchTabPublic("research");
+            view.runQuickAction(cmd.action);
+          }
+        }
+      });
+    }
     this.addCommand({
       id: "deep-vault-daily-digest",
-      name: "Generate daily research digest",
+      name: "Deep Vault: Generate daily research digest",
       callback: async () => {
         var _a;
         await this.activateView();
@@ -1466,15 +1547,28 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
       }
     });
     this.addCommand({
-      id: "deep-vault-export-note",
-      name: "Export current note analysis to new note",
-      editorCallback: async () => {
+      id: "deep-vault-search",
+      name: "Deep Vault: Search vault",
+      callback: async () => {
+        var _a;
         await this.activateView();
-        new import_obsidian.Notice("Run a Quick Action first, then click \u{1F4BE} Save as Note.");
+        const view = (_a = this.app.workspace.getLeavesOfType(DEEP_VAULT_VIEW)[0]) == null ? void 0 : _a.view;
+        if (view)
+          view.switchTabPublic("search");
       }
     });
+    this.addCommand({
+      id: "deep-vault-setup-wizard",
+      name: "Deep Vault: Open setup wizard",
+      callback: () => new SetupWizardModal(this.app, this).open()
+    });
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v3.0.4 loaded \u2705");
+    this.app.workspace.onLayoutReady(() => {
+      if (!this.settings.hasSeenWizard) {
+        setTimeout(() => new SetupWizardModal(this.app, this).open(), 800);
+      }
+    });
+    console.log("Deep Vault v3.1.0 loaded \u2705");
   }
   async activateView() {
     const { workspace } = this.app;
@@ -1493,6 +1587,195 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
   }
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+};
+var SetupWizardModal = class extends import_obsidian.Modal {
+  constructor(app, plugin) {
+    super(app);
+    this.step = 0;
+    this.steps = [
+      {
+        title: "\u{1F44B} Welcome to Deep Vault",
+        icon: "\u{1F50D}",
+        content: (el, plugin, next, _close) => {
+          el.createEl("p", { text: "Deep Vault is your AI-powered research assistant inside Obsidian, powered by Anthropic's Claude.", cls: "dv-wizard-text" });
+          el.createEl("p", { text: "This quick setup takes less than 2 minutes.", cls: "dv-wizard-text" });
+          const features = [
+            "\u{1F52C} Research tab \u2014 6 smart quick actions on any note",
+            "\u{1F4AC} Chat \u2014 multi-turn conversation with your vault",
+            "\u{1F517} Synthesis \u2014 combine and compare multiple notes",
+            "\u{1F4DD} Templates \u2014 save and reuse custom prompts",
+            "\u{1F50D} Search \u2014 natural language search across all notes",
+            "\u{1F4F0} Daily Digest \u2014 summarise recent work automatically"
+          ];
+          const list = el.createEl("ul", { cls: "dv-wizard-list" });
+          features.forEach((f) => list.createEl("li", { text: f }));
+          el.createEl("button", { text: "Get Started \u2192", cls: "dv-btn-primary dv-wizard-btn" }).onclick = next;
+        }
+      },
+      {
+        title: "\u{1F511} Connect to Claude",
+        icon: "\u{1F511}",
+        content: (el, plugin, next, _close) => {
+          el.createEl("p", { text: "Deep Vault needs an Anthropic API key to power Claude.", cls: "dv-wizard-text" });
+          const steps = el.createEl("ol", { cls: "dv-wizard-steps" });
+          steps.createEl("li", { text: "Go to console.anthropic.com and sign up" });
+          steps.createEl("li", { text: "Navigate to API Keys \u2192 Create Key" });
+          steps.createEl("li", { text: "Copy the key (starts with sk-ant-...)" });
+          steps.createEl("li", { text: "Paste it below" });
+          el.createEl("label", { text: "Your API Key", cls: "dv-modal-label" });
+          const keyInput = el.createEl("input", {
+            cls: "dv-modal-input",
+            attr: { type: "password", placeholder: "sk-ant-..." }
+          });
+          keyInput.value = plugin.settings.apiKey;
+          el.createEl("p", { text: "\u{1F512} Your key is stored locally in Obsidian and never sent anywhere except Anthropic.", cls: "dv-wizard-hint" });
+          const btn = el.createEl("button", { text: "Save & Continue \u2192", cls: "dv-btn-primary dv-wizard-btn" });
+          btn.onclick = async () => {
+            const key = keyInput.value.trim();
+            if (!key.startsWith("sk-ant-") && key.length > 0) {
+              new import_obsidian.Notice("That doesn't look like a valid Anthropic API key.");
+              return;
+            }
+            plugin.settings.apiKey = key;
+            await plugin.saveSettings();
+            next();
+          };
+          const skipBtn = el.createEl("button", { text: "Skip for now", cls: "dv-btn-ghost dv-wizard-skip" });
+          skipBtn.onclick = next;
+        }
+      },
+      {
+        title: "\u{1F916} Choose Your Model",
+        icon: "\u{1F916}",
+        content: (el, plugin, next, _close) => {
+          el.createEl("p", { text: "Which Claude model would you like to use?", cls: "dv-wizard-text" });
+          const models = [
+            {
+              id: "claude-sonnet-4-20250514",
+              name: "Claude Sonnet 4",
+              badge: "\u2B50 Recommended",
+              desc: "Best balance of intelligence and speed. Ideal for deep research, synthesis and complex analysis.",
+              badgeCls: "dv-wizard-badge-recommended"
+            },
+            {
+              id: "claude-haiku-4-5-20251001",
+              name: "Claude Haiku 4.5",
+              badge: "\u26A1 Fastest",
+              desc: "Quicker responses, lower cost. Great for quick summaries and simple tasks.",
+              badgeCls: "dv-wizard-badge-fast"
+            }
+          ];
+          const modelGrid = el.createDiv("dv-wizard-model-grid");
+          for (const m of models) {
+            const card = modelGrid.createDiv("dv-wizard-model-card");
+            if (plugin.settings.model === m.id)
+              card.addClass("dv-wizard-model-selected");
+            const cardTop = card.createDiv("dv-wizard-model-top");
+            cardTop.createEl("span", { text: m.name, cls: "dv-wizard-model-name" });
+            cardTop.createEl("span", { text: m.badge, cls: `dv-wizard-badge ${m.badgeCls}` });
+            card.createEl("p", { text: m.desc, cls: "dv-wizard-model-desc" });
+            card.onclick = async () => {
+              modelGrid.querySelectorAll(".dv-wizard-model-card").forEach((c) => c.removeClass("dv-wizard-model-selected"));
+              card.addClass("dv-wizard-model-selected");
+              plugin.settings.model = m.id;
+              await plugin.saveSettings();
+            };
+          }
+          el.createEl("button", { text: "Continue \u2192", cls: "dv-btn-primary dv-wizard-btn" }).onclick = next;
+        }
+      },
+      {
+        title: "\u2328\uFE0F Keyboard Shortcuts",
+        icon: "\u2328\uFE0F",
+        content: (el, _plugin, next, _close) => {
+          el.createEl("p", { text: "Deep Vault registers these commands in Obsidian. You can assign hotkeys to any of them in Settings \u2192 Hotkeys.", cls: "dv-wizard-text" });
+          const shortcuts = [
+            { cmd: "Open Deep Vault panel", hint: "Main panel" },
+            { cmd: "Deep Vault: Go to Research tab", hint: "Research" },
+            { cmd: "Deep Vault: Go to Chat tab", hint: "Chat" },
+            { cmd: "Deep Vault: Go to Search tab", hint: "Search" },
+            { cmd: "Deep Vault: Summarise current note", hint: "Quick action" },
+            { cmd: "Deep Vault: Auto-tag current note", hint: "Quick action" },
+            { cmd: "Deep Vault: Generate daily research digest", hint: "Digest" },
+            { cmd: "Deep Vault: Search vault", hint: "Vault search" }
+          ];
+          const table = el.createEl("table", { cls: "dv-wizard-table" });
+          const thead = table.createEl("thead");
+          const hrow = thead.createEl("tr");
+          hrow.createEl("th", { text: "Command" });
+          hrow.createEl("th", { text: "What it does" });
+          const tbody = table.createEl("tbody");
+          shortcuts.forEach((s) => {
+            const row = tbody.createEl("tr");
+            row.createEl("td", { text: s.cmd, cls: "dv-wizard-cmd" });
+            row.createEl("td", { text: s.hint, cls: "dv-wizard-hint-cell" });
+          });
+          el.createEl("p", { text: "\u{1F4A1} Tip: Go to Settings \u2192 Hotkeys and search Deep Vault to assign your preferred shortcuts.", cls: "dv-wizard-hint" });
+          el.createEl("button", { text: "Continue \u2192", cls: "dv-btn-primary dv-wizard-btn" }).onclick = next;
+        }
+      },
+      {
+        title: "\u{1F389} You are ready!",
+        icon: "\u{1F389}",
+        content: (el, _plugin, _next, close) => {
+          el.createEl("p", { text: "Deep Vault is all set up. Here is how to get started:", cls: "dv-wizard-text" });
+          const tips = [
+            { icon: "1\uFE0F\u20E3", text: "Open any note in your vault" },
+            { icon: "2\uFE0F\u20E3", text: "Click the \u{1F50D} icon in the left ribbon" },
+            { icon: "3\uFE0F\u20E3", text: "Try Summarize in the Research tab" },
+            { icon: "4\uFE0F\u20E3", text: "Ask Claude anything in the Chat tab" }
+          ];
+          const tipList = el.createDiv("dv-wizard-tips");
+          tips.forEach((t) => {
+            const row = tipList.createDiv("dv-wizard-tip-row");
+            row.createEl("span", { text: t.icon, cls: "dv-wizard-tip-icon" });
+            row.createEl("span", { text: t.text, cls: "dv-wizard-tip-text" });
+          });
+          el.createEl("button", { text: "Open Deep Vault \u{1F680}", cls: "dv-btn-primary dv-wizard-btn" }).onclick = close;
+        }
+      }
+    ];
+    this.plugin = plugin;
+  }
+  onOpen() {
+    this.renderStep();
+  }
+  renderStep() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("dv-wizard-modal");
+    const step = this.steps[this.step];
+    const progress = contentEl.createDiv("dv-wizard-progress");
+    this.steps.forEach((_, i) => {
+      progress.createDiv(i <= this.step ? "dv-wizard-dot dv-wizard-dot-active" : "dv-wizard-dot");
+    });
+    contentEl.createEl("div", { text: step.icon, cls: "dv-wizard-icon" });
+    contentEl.createEl("h2", { text: step.title, cls: "dv-wizard-title" });
+    const contentArea = contentEl.createDiv("dv-wizard-content");
+    step.content(
+      contentArea,
+      this.plugin,
+      () => {
+        this.step++;
+        if (this.step < this.steps.length)
+          this.renderStep();
+        else
+          this.close();
+      },
+      () => this.close()
+    );
+  }
+  async onClose() {
+    this.plugin.settings.hasSeenWizard = true;
+    await this.plugin.saveSettings();
+    const leaves = this.app.workspace.getLeavesOfType(DEEP_VAULT_VIEW);
+    if (leaves.length === 0) {
+      const leaf = this.app.workspace.getRightLeaf(false);
+      await leaf.setViewState({ type: DEEP_VAULT_VIEW, active: true });
+      this.app.workspace.revealLeaf(leaf);
+    }
+    this.contentEl.empty();
   }
 };
 var DeepVaultSettingTab = class extends import_obsidian.PluginSettingTab {
