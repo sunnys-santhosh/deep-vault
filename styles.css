@@ -1094,3 +1094,146 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ═══════════════════════════════════════════════
+   Deep Vault v3.0.3 — Vault-Wide Search Styles
+   ═══════════════════════════════════════════════ */
+
+.dv-search-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.dv-search-box {
+  margin-bottom: 8px;
+}
+
+.dv-search-input {
+  width: 100%;
+  min-height: 72px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12.5px;
+  font-family: var(--font-interface);
+  resize: none;
+  box-sizing: border-box;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+
+.dv-search-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.dv-search-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.dv-search-option-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.dv-search-folder-input {
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.dv-search-slider {
+  width: 100%;
+  accent-color: var(--interactive-accent);
+}
+
+.dv-btn-search {
+  width: 100%;
+  padding: 9px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-bottom: 6px;
+}
+
+.dv-btn-search:hover {
+  opacity: 0.88;
+}
+
+.dv-search-stats {
+  padding: 5px 0;
+  margin-bottom: 4px;
+}
+
+.dv-search-stat {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+
+/* ─── Sources ────────────────────────────────── */
+
+.dv-search-sources {
+  margin-top: 10px;
+}
+
+.dv-source-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.dv-source-chip {
+  padding: 3px 10px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 150px;
+  text-overflow: ellipsis;
+}
+
+.dv-source-chip:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+}
+
+.dv-source-more {
+  cursor: default;
+  font-style: italic;
+}
+
+.dv-source-more:hover {
+  border-color: var(--background-modifier-border) !important;
+  color: var(--text-muted) !important;
+}

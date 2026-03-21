@@ -219,6 +219,7 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     this.buildPanelChat(root);
     this.buildPanelSynthesis(root);
     this.buildPanelTemplates(root);
+    this.buildPanelSearch(root);
     this.buildPanelHistory(root);
     this.statusEl = root.createDiv("dv-status");
     this.switchTab("research");
@@ -249,6 +250,9 @@ var DeepVaultView = class extends import_obsidian.ItemView {
     this.tabTemplates = tabBar.createDiv("dv-tab");
     this.tabTemplates.innerHTML = "\u{1F4DD} Templates";
     this.tabTemplates.onclick = () => this.switchTab("templates");
+    this.tabSearch = tabBar.createDiv("dv-tab");
+    this.tabSearch.innerHTML = "\u{1F50D} Search";
+    this.tabSearch.onclick = () => this.switchTab("search");
     this.tabHistory = tabBar.createDiv("dv-tab");
     this.tabHistory.innerHTML = "\u{1F4CB} History";
     this.tabHistory.onclick = () => this.switchTab("history");
@@ -256,11 +260,11 @@ var DeepVaultView = class extends import_obsidian.ItemView {
   switchTab(tab) {
     var _a;
     this.activeTab = tab;
-    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabTemplates, this.tabHistory];
-    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelTemplates, this.panelHistory];
+    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabTemplates, this.tabSearch, this.tabHistory];
+    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelTemplates, this.panelSearch, this.panelHistory];
     tabs.forEach((t) => t.removeClass("dv-tab-active"));
     panels.forEach((p) => p.addClass("dv-hidden"));
-    const map = { research: 0, chat: 1, synthesis: 2, templates: 3, history: 4 };
+    const map = { research: 0, chat: 1, synthesis: 2, templates: 3, search: 4, history: 5 };
     tabs[map[tab]].addClass("dv-tab-active");
     panels[map[tab]].removeClass("dv-hidden");
     if (tab === "chat")
@@ -634,6 +638,181 @@ ${note.content.slice(0, 3e3)}` : tpl.prompt;
     } catch (err) {
       this.responseEl.empty();
       this.responseEl.createEl("p", { text: `\u274C ${err.message}`, cls: "dv-error" });
+    }
+    this.setStatus("");
+  }
+  // ─── Vault-Wide Search Panel (v3.0.3) ────────────────────────────────────
+  buildPanelSearch(root) {
+    this.panelSearch = root.createDiv("dv-panel");
+    this.panelSearch.createEl("p", { text: "VAULT-WIDE SEARCH", cls: "dv-section-label" });
+    this.panelSearch.createEl("p", {
+      text: "Ask Claude anything \u2014 it will search across all your notes to find the answer.",
+      cls: "dv-search-desc"
+    });
+    const searchBox = this.panelSearch.createDiv("dv-search-box");
+    const searchInput = searchBox.createEl("textarea", {
+      cls: "dv-search-input",
+      attr: { placeholder: "e.g. What do my notes say about machine learning? Which notes mention climate change? Summarise everything I know about quantum computing..." }
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        runSearch();
+      }
+    });
+    const optionsRow = this.panelSearch.createDiv("dv-search-options");
+    const folderLabel = optionsRow.createEl("label", { text: "Folder filter (optional):", cls: "dv-search-option-label" });
+    const folderInput = optionsRow.createEl("input", {
+      cls: "dv-search-folder-input",
+      attr: { type: "text", placeholder: "e.g. Research/" }
+    });
+    const maxLabel = optionsRow.createEl("label", { cls: "dv-search-option-label" });
+    const maxSlider = optionsRow.createEl("input", {
+      cls: "dv-search-slider",
+      attr: { type: "range", min: "5", max: "50", value: "20" }
+    });
+    const updateMaxLabel = () => maxLabel.setText(`Max notes to search: ${maxSlider.value}`);
+    updateMaxLabel();
+    maxSlider.addEventListener("input", updateMaxLabel);
+    const searchBtn = this.panelSearch.createEl("button", { text: "\u{1F50D} Search Vault", cls: "dv-btn-search" });
+    const statsEl = this.panelSearch.createDiv("dv-search-stats dv-hidden");
+    this._searchStatsEl = statsEl;
+    this.panelSearch.createEl("p", { text: "RESULTS", cls: "dv-section-label dv-section-label-top" });
+    const resultsWrap = this.panelSearch.createDiv("dv-response-wrap");
+    const resultsEl = resultsWrap.createDiv("dv-response");
+    resultsEl.createEl("p", { text: "Enter a question above to search across your vault.", cls: "dv-placeholder" });
+    this._searchResultsEl = resultsEl;
+    const sourcesEl = this.panelSearch.createDiv("dv-search-sources dv-hidden");
+    this._sourcesEl = sourcesEl;
+    const searchExportRow = this.panelSearch.createDiv("dv-export-row dv-hidden");
+    searchExportRow.createEl("button", { text: "\u{1F4BE} Save Results as Note", cls: "dv-btn-export" }).onclick = () => {
+      var _a;
+      return this.exportToNote((_a = this._lastSearchResult) != null ? _a : "", "Vault Search Results");
+    };
+    this._searchExportRow = searchExportRow;
+    const runSearch = () => {
+      const query = searchInput.value.trim();
+      if (!query) {
+        new import_obsidian.Notice("Please enter a search query.");
+        return;
+      }
+      const folder = folderInput.value.trim();
+      const maxNotes = parseInt(maxSlider.value);
+      this.runVaultSearch(query, folder, maxNotes);
+    };
+    searchBtn.onclick = runSearch;
+  }
+  async runVaultSearch(query, folderFilter, maxNotes) {
+    const resultsEl = this._searchResultsEl;
+    const statsEl = this._searchStatsEl;
+    const sourcesEl = this._sourcesEl;
+    const exportRow = this._searchExportRow;
+    if (!this.plugin.settings.apiKey) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: "\u26A0\uFE0F Add your API key in Settings \u2192 Deep Vault", cls: "dv-error" });
+      return;
+    }
+    resultsEl.empty();
+    resultsEl.createEl("p", { text: "\u23F3 Scanning vault...", cls: "dv-thinking" });
+    statsEl.addClass("dv-hidden");
+    sourcesEl.addClass("dv-hidden");
+    exportRow.addClass("dv-hidden");
+    this.setStatus("\u23F3 Searching vault...");
+    let files = this.app.vault.getMarkdownFiles();
+    if (folderFilter) {
+      files = files.filter((f) => f.path.startsWith(folderFilter));
+    }
+    if (files.length === 0) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: `\u274C No notes found${folderFilter ? ` in folder "${folderFilter}"` : ""}.`, cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+    const keywords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const scored = files.map((file) => {
+      var _a, _b, _c, _d;
+      const cache = this.app.metadataCache.getFileCache(file);
+      const headings = (_b = (_a = cache == null ? void 0 : cache.headings) == null ? void 0 : _a.map((h) => h.heading.toLowerCase()).join(" ")) != null ? _b : "";
+      const tags = (_d = (_c = cache == null ? void 0 : cache.tags) == null ? void 0 : _c.map((t) => t.tag).join(" ")) != null ? _d : "";
+      const score = keywords.reduce((acc, kw) => {
+        if (file.basename.toLowerCase().includes(kw))
+          acc += 3;
+        if (headings.includes(kw))
+          acc += 2;
+        if (tags.includes(kw))
+          acc += 2;
+        return acc;
+      }, 0);
+      return { file, score };
+    });
+    const topFiles = scored.sort((a, b) => b.score - a.score).slice(0, maxNotes).map((s) => s.file);
+    resultsEl.empty();
+    resultsEl.createEl("p", { text: `\u23F3 Reading ${topFiles.length} notes...`, cls: "dv-thinking" });
+    const noteChunks = [];
+    const sourceNames = [];
+    for (const file of topFiles) {
+      try {
+        const content = await this.app.vault.read(file);
+        const excerpt = content.slice(0, 800).trim();
+        if (excerpt.length > 50) {
+          noteChunks.push(`## ${file.basename}
+
+${excerpt}`);
+          sourceNames.push(file.basename);
+        }
+      } catch (e) {
+      }
+    }
+    if (noteChunks.length === 0) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: "\u274C Could not read any matching notes.", cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+    resultsEl.empty();
+    resultsEl.createEl("p", { text: `\u23F3 Asking Claude to synthesize ${noteChunks.length} notes...`, cls: "dv-thinking" });
+    const prompt = `You are searching across a user's Obsidian vault to answer their query.
+
+Query: "${query}"
+
+Below are excerpts from ${noteChunks.length} relevant notes. Synthesize a clear, well-structured answer based on what these notes contain. Always cite which notes you're drawing from.
+
+If the notes don't contain enough information to answer the query, say so clearly.
+
+---
+
+${noteChunks.join("\n\n---\n\n")}`;
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompt }], false);
+      resultsEl.empty();
+      renderMarkdown(resultsEl, result);
+      this._lastSearchResult = result;
+      statsEl.removeClass("dv-hidden");
+      statsEl.empty();
+      statsEl.createEl("span", { text: `\u{1F4CA} Searched ${noteChunks.length} of ${files.length} notes`, cls: "dv-search-stat" });
+      sourcesEl.removeClass("dv-hidden");
+      sourcesEl.empty();
+      sourcesEl.createEl("p", { text: "SOURCES", cls: "dv-section-label" });
+      const sourceGrid = sourcesEl.createDiv("dv-source-grid");
+      sourceNames.slice(0, 12).forEach((name) => {
+        const chip = sourceGrid.createEl("span", { text: name, cls: "dv-source-chip" });
+        chip.onclick = async () => {
+          const file = this.app.vault.getMarkdownFiles().find((f) => f.basename === name);
+          if (file) {
+            const leaf = this.app.workspace.getLeaf(false);
+            await leaf.openFile(file);
+          }
+        };
+      });
+      if (sourceNames.length > 12) {
+        sourceGrid.createEl("span", { text: `+${sourceNames.length - 12} more`, cls: "dv-source-chip dv-source-more" });
+      }
+      exportRow.removeClass("dv-hidden");
+      this.chatHistory.push({ role: "user", content: `[Vault Search] "${query}"`, timestamp: new Date() });
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+    } catch (err) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: `\u274C ${err.message}`, cls: "dv-error" });
     }
     this.setStatus("");
   }
@@ -1144,7 +1323,7 @@ var DeepVaultPlugin = class extends import_obsidian.Plugin {
       }
     });
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v3.0.2 loaded \u2705");
+    console.log("Deep Vault v3.0.3 loaded \u2705");
   }
   async activateView() {
     const { workspace } = this.app;

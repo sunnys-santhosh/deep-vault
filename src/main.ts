@@ -206,7 +206,7 @@ class NoteSuggestModal extends SuggestModal<TFile> {
 class DeepVaultView extends ItemView {
   private plugin: DeepVaultPlugin;
   private chatHistory: ChatMessage[] = [];
-  private activeTab: "research" | "chat" | "synthesis" | "templates" | "history" = "research";
+  private activeTab: "research" | "chat" | "synthesis" | "templates" | "search" | "history" = "research";
   private lastResponse: string = "";
 
   // UI elements
@@ -214,11 +214,13 @@ class DeepVaultView extends ItemView {
   private tabChat: HTMLElement;
   private tabSynthesis: HTMLElement;
   private tabTemplates: HTMLElement;
+  private tabSearch: HTMLElement;
   private tabHistory: HTMLElement;
   private panelResearch: HTMLElement;
   private panelChat: HTMLElement;
   private panelSynthesis: HTMLElement;
   private panelTemplates: HTMLElement;
+  private panelSearch: HTMLElement;
   private panelHistory: HTMLElement;
   private chatMessagesEl: HTMLElement;
   private chatInputEl: HTMLTextAreaElement;
@@ -244,6 +246,7 @@ class DeepVaultView extends ItemView {
     this.buildPanelChat(root);
     this.buildPanelSynthesis(root);
     this.buildPanelTemplates(root);
+    this.buildPanelSearch(root);
     this.buildPanelHistory(root);
     this.statusEl = root.createDiv("dv-status");
     this.switchTab("research");
@@ -283,19 +286,23 @@ class DeepVaultView extends ItemView {
     this.tabTemplates.innerHTML = "📝 Templates";
     this.tabTemplates.onclick = () => this.switchTab("templates");
 
+    this.tabSearch = tabBar.createDiv("dv-tab");
+    this.tabSearch.innerHTML = "🔍 Search";
+    this.tabSearch.onclick = () => this.switchTab("search");
+
     this.tabHistory = tabBar.createDiv("dv-tab");
     this.tabHistory.innerHTML = "📋 History";
     this.tabHistory.onclick = () => this.switchTab("history");
   }
 
-  private switchTab(tab: "research" | "chat" | "synthesis" | "templates" | "history") {
+  private switchTab(tab: "research" | "chat" | "synthesis" | "templates" | "search" | "history") {
     this.activeTab = tab;
-    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabTemplates, this.tabHistory];
-    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelTemplates, this.panelHistory];
+    const tabs = [this.tabResearch, this.tabChat, this.tabSynthesis, this.tabTemplates, this.tabSearch, this.tabHistory];
+    const panels = [this.panelResearch, this.panelChat, this.panelSynthesis, this.panelTemplates, this.panelSearch, this.panelHistory];
     tabs.forEach(t => t.removeClass("dv-tab-active"));
     panels.forEach(p => p.addClass("dv-hidden"));
 
-    const map: Record<string, number> = { research: 0, chat: 1, synthesis: 2, templates: 3, history: 4 };
+    const map: Record<string, number> = { research: 0, chat: 1, synthesis: 2, templates: 3, search: 4, history: 5 };
     tabs[map[tab]].addClass("dv-tab-active");
     panels[map[tab]].removeClass("dv-hidden");
 
@@ -723,6 +730,231 @@ class DeepVaultView extends ItemView {
       this.responseEl.empty();
       this.responseEl.createEl("p", { text: `❌ ${err.message}`, cls: "dv-error" });
     }
+    this.setStatus("");
+  }
+
+
+  // ─── Vault-Wide Search Panel (v3.0.3) ────────────────────────────────────
+
+  private buildPanelSearch(root: HTMLElement) {
+    this.panelSearch = root.createDiv("dv-panel");
+
+    // Header
+    this.panelSearch.createEl("p", { text: "VAULT-WIDE SEARCH", cls: "dv-section-label" });
+    this.panelSearch.createEl("p", {
+      text: "Ask Claude anything — it will search across all your notes to find the answer.",
+      cls: "dv-search-desc"
+    });
+
+    // Search input
+    const searchBox = this.panelSearch.createDiv("dv-search-box");
+    const searchInput = searchBox.createEl("textarea", {
+      cls: "dv-search-input",
+      attr: { placeholder: "e.g. What do my notes say about machine learning? Which notes mention climate change? Summarise everything I know about quantum computing..." }
+    });
+
+    searchInput.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        runSearch();
+      }
+    });
+
+    // Options row
+    const optionsRow = this.panelSearch.createDiv("dv-search-options");
+
+    // Folder filter
+    const folderLabel = optionsRow.createEl("label", { text: "Folder filter (optional):", cls: "dv-search-option-label" });
+    const folderInput = optionsRow.createEl("input", {
+      cls: "dv-search-folder-input",
+      attr: { type: "text", placeholder: "e.g. Research/" }
+    });
+
+    // Max notes slider
+    const maxLabel = optionsRow.createEl("label", { cls: "dv-search-option-label" });
+    const maxSlider = optionsRow.createEl("input", {
+      cls: "dv-search-slider",
+      attr: { type: "range", min: "5", max: "50", value: "20" }
+    }) as HTMLInputElement;
+    const updateMaxLabel = () => maxLabel.setText(`Max notes to search: ${maxSlider.value}`);
+    updateMaxLabel();
+    maxSlider.addEventListener("input", updateMaxLabel);
+
+    // Search button
+    const searchBtn = this.panelSearch.createEl("button", { text: "🔍 Search Vault", cls: "dv-btn-search" });
+
+    // Stats bar
+    const statsEl = this.panelSearch.createDiv("dv-search-stats dv-hidden");
+    (this as any)._searchStatsEl = statsEl;
+
+    // Results area
+    this.panelSearch.createEl("p", { text: "RESULTS", cls: "dv-section-label dv-section-label-top" });
+    const resultsWrap = this.panelSearch.createDiv("dv-response-wrap");
+    const resultsEl = resultsWrap.createDiv("dv-response");
+    resultsEl.createEl("p", { text: "Enter a question above to search across your vault.", cls: "dv-placeholder" });
+    (this as any)._searchResultsEl = resultsEl;
+
+    // Sources area
+    const sourcesEl = this.panelSearch.createDiv("dv-search-sources dv-hidden");
+    (this as any)._sourcesEl = sourcesEl;
+
+    // Export row
+    const searchExportRow = this.panelSearch.createDiv("dv-export-row dv-hidden");
+    searchExportRow.createEl("button", { text: "💾 Save Results as Note", cls: "dv-btn-export" })
+      .onclick = () => this.exportToNote((this as any)._lastSearchResult ?? "", "Vault Search Results");
+    (this as any)._searchExportRow = searchExportRow;
+
+    const runSearch = () => {
+      const query = searchInput.value.trim();
+      if (!query) { new Notice("Please enter a search query."); return; }
+      const folder = folderInput.value.trim();
+      const maxNotes = parseInt(maxSlider.value);
+      this.runVaultSearch(query, folder, maxNotes);
+    };
+
+    searchBtn.onclick = runSearch;
+  }
+
+  private async runVaultSearch(query: string, folderFilter: string, maxNotes: number) {
+    const resultsEl = (this as any)._searchResultsEl as HTMLElement;
+    const statsEl = (this as any)._searchStatsEl as HTMLElement;
+    const sourcesEl = (this as any)._sourcesEl as HTMLElement;
+    const exportRow = (this as any)._searchExportRow as HTMLElement;
+
+    if (!this.plugin.settings.apiKey) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: "⚠️ Add your API key in Settings → Deep Vault", cls: "dv-error" });
+      return;
+    }
+
+    // Reset UI
+    resultsEl.empty();
+    resultsEl.createEl("p", { text: "⏳ Scanning vault...", cls: "dv-thinking" });
+    statsEl.addClass("dv-hidden");
+    sourcesEl.addClass("dv-hidden");
+    exportRow.addClass("dv-hidden");
+    this.setStatus("⏳ Searching vault...");
+
+    // Get all markdown files, optionally filtered by folder
+    let files = this.app.vault.getMarkdownFiles();
+    if (folderFilter) {
+      files = files.filter(f => f.path.startsWith(folderFilter));
+    }
+
+    if (files.length === 0) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: `❌ No notes found${folderFilter ? ` in folder "${folderFilter}"` : ""}.`, cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+
+    // Score and rank notes by keyword relevance first
+    const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    const scored = files.map(file => {
+      const cache = this.app.metadataCache.getFileCache(file);
+      const headings = cache?.headings?.map(h => h.heading.toLowerCase()).join(" ") ?? "";
+      const tags = cache?.tags?.map(t => t.tag).join(" ") ?? "";
+      const score = keywords.reduce((acc, kw) => {
+        if (file.basename.toLowerCase().includes(kw)) acc += 3;
+        if (headings.includes(kw)) acc += 2;
+        if (tags.includes(kw)) acc += 2;
+        return acc;
+      }, 0);
+      return { file, score };
+    });
+
+    // Sort by relevance, take top N
+    const topFiles = scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxNotes)
+      .map(s => s.file);
+
+    // Update status
+    resultsEl.empty();
+    resultsEl.createEl("p", { text: `⏳ Reading ${topFiles.length} notes...`, cls: "dv-thinking" });
+
+    // Read note contents
+    const noteChunks: string[] = [];
+    const sourceNames: string[] = [];
+
+    for (const file of topFiles) {
+      try {
+        const content = await this.app.vault.read(file);
+        const excerpt = content.slice(0, 800).trim();
+        if (excerpt.length > 50) {
+          noteChunks.push(`## ${file.basename}\n\n${excerpt}`);
+          sourceNames.push(file.basename);
+        }
+      } catch { /* skip unreadable files */ }
+    }
+
+    if (noteChunks.length === 0) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: "❌ Could not read any matching notes.", cls: "dv-error" });
+      this.setStatus("");
+      return;
+    }
+
+    // Update status
+    resultsEl.empty();
+    resultsEl.createEl("p", { text: `⏳ Asking Claude to synthesize ${noteChunks.length} notes...`, cls: "dv-thinking" });
+
+    const prompt = `You are searching across a user's Obsidian vault to answer their query.
+
+Query: "${query}"
+
+Below are excerpts from ${noteChunks.length} relevant notes. Synthesize a clear, well-structured answer based on what these notes contain. Always cite which notes you're drawing from.
+
+If the notes don't contain enough information to answer the query, say so clearly.
+
+---
+
+${noteChunks.join("\n\n---\n\n")}`;
+
+    try {
+      const result = await this.callClaude([{ role: "user", content: prompt }], false);
+
+      // Show results
+      resultsEl.empty();
+      renderMarkdown(resultsEl, result);
+      (this as any)._lastSearchResult = result;
+
+      // Show stats
+      statsEl.removeClass("dv-hidden");
+      statsEl.empty();
+      statsEl.createEl("span", { text: `📊 Searched ${noteChunks.length} of ${files.length} notes`, cls: "dv-search-stat" });
+
+      // Show sources
+      sourcesEl.removeClass("dv-hidden");
+      sourcesEl.empty();
+      sourcesEl.createEl("p", { text: "SOURCES", cls: "dv-section-label" });
+      const sourceGrid = sourcesEl.createDiv("dv-source-grid");
+      sourceNames.slice(0, 12).forEach(name => {
+        const chip = sourceGrid.createEl("span", { text: name, cls: "dv-source-chip" });
+        chip.onclick = async () => {
+          const file = this.app.vault.getMarkdownFiles().find(f => f.basename === name);
+          if (file) {
+            const leaf = this.app.workspace.getLeaf(false);
+            await leaf.openFile(file);
+          }
+        };
+      });
+      if (sourceNames.length > 12) {
+        sourceGrid.createEl("span", { text: `+${sourceNames.length - 12} more`, cls: "dv-source-chip dv-source-more" });
+      }
+
+      // Show export
+      exportRow.removeClass("dv-hidden");
+
+      // Add to history
+      this.chatHistory.push({ role: "user", content: `[Vault Search] "${query}"`, timestamp: new Date() });
+      this.chatHistory.push({ role: "assistant", content: result, timestamp: new Date() });
+
+    } catch (err) {
+      resultsEl.empty();
+      resultsEl.createEl("p", { text: `❌ ${err.message}`, cls: "dv-error" });
+    }
+
     this.setStatus("");
   }
 
@@ -1268,7 +1500,7 @@ export default class DeepVaultPlugin extends Plugin {
     });
 
     this.addSettingTab(new DeepVaultSettingTab(this.app, this));
-    console.log("Deep Vault v3.0.2 loaded ✅");
+    console.log("Deep Vault v3.0.3 loaded ✅");
   }
 
   async activateView() {
